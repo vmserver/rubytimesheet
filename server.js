@@ -110,7 +110,7 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // Brand name for header (avoid hardcoding in views)
-const BRAND_NAME = process.env.BRAND_NAME || 'Ruby Group INC Employee Timesheet';
+const BRAND_NAME = process.env.BRAND_NAME || 'Ruby Group Inc. Employee Timesheet';
 app.use((req, res, next) => {
   res.locals.brand = BRAND_NAME;
   next();
