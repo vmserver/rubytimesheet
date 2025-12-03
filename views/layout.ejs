@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title || 'Timesheet' %></title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><%= brand %></div>
+      <% if (user) { %>
+        <div class="topbar-nav">
+          <button onclick="window.history.back()" class="btn btn-nav">← Back</button>
+          <a href="/dashboard" class="btn btn-nav">Home</a>
+        </div>
+        <div class="topbar-right">
+          <span class="user-label"><%= user.name %> <% if (user.is_admin) { %>(Admin)<% } %></span>
+          <form method="post" action="/logout">
+            <button type="submit" class="btn btn-outline">Log out</button>
+          </form>
+        </div>
+      <% } %>
+    </header>
+
+    <main class="container">
+      <%- body %>
+    </main>
+  </body>
+</html>
+
+

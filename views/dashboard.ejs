@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard - Timesheet</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><%= brand %></div>
+      <% if (user) { %>
+        <div class="topbar-nav">
+          <button onclick="window.history.back()" class="btn btn-nav">← Back</button>
+          <a href="/dashboard" class="btn btn-nav">Home</a>
+        </div>
+        <div class="topbar-right">
+          <span class="user-label"><%= user.name %> <% if (user.is_admin) { %>(Admin)<% } %></span>
+          <form method="post" action="/logout">
+            <button type="submit" class="btn btn-outline">Log out</button>
+          </form>
+        </div>
+      <% } %>
+    </header>
+
+    <main class="container">
+      <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+        <div class="alert"><%= errorMessage %></div>
+      <% } %>
+
+      <section class="card">
+        <div class="card-header">
+          <h1>Hi <%= user.name %>, record your time</h1>
+          <div id="ny-clock" class="clock"></div>
+        </div>
+        <% if (typeof isPunchedIn !== 'undefined' && isPunchedIn) { %>
+          <p class="status-message status-in">✓ Currently punched in</p>
+        <% } else { %>
+          <p class="status-message status-out">Not punched in</p>
+        <% } %>
+        <% if (typeof isOnBreak !== 'undefined' && isOnBreak) { %>
+          <p class="status-message status-break">⏸ On break</p>
+        <% } %>
+        <div style="margin: 1rem 0; padding: 0.75rem; background: #f0f9ff; border-radius: 0.5rem; border-left: 4px solid #2563eb;">
+          <strong>Today's Hours:</strong> <span style="font-size: 1.2rem; font-weight: bold; color: #2563eb;"><%= typeof todayHours !== 'undefined' ? todayHours : '0.00' %> hours</span>
+        </div>
+
+        <div class="button-row">
+          <form method="post" action="/punch/in">
+            <button type="submit" class="btn btn-success" <% if (typeof isPunchedIn !== 'undefined' && isPunchedIn) { %>disabled<% } %>>Punch In</button>
+          </form>
+          <form method="post" action="/punch/out">
+            <button type="submit" class="btn btn-danger" <% if (typeof isPunchedIn === 'undefined' || !isPunchedIn) { %>disabled<% } %>>Punch Out</button>
+          </form>
+          <form method="post" action="/punch/break_start">
+            <button
+              type="submit"
+              class="btn btn-secondary"
+              <% if (typeof isPunchedIn === 'undefined' || !isPunchedIn || (typeof isOnBreak !== 'undefined' && isOnBreak)) { %>disabled<% } %>
+            >
+              Start Break
+            </button>
+          </form>
+          <form method="post" action="/punch/break_end">
+            <button
+              type="submit"
+              class="btn btn-secondary"
+              <% if (typeof isOnBreak === 'undefined' || !isOnBreak) { %>disabled<% } %>
+            >
+              End Break
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section class="card recent-activity">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <h2 style="margin: 0;">Recent activity</h2>
+          <a href="/hours" class="btn btn-outline">View Previous Days</a>
+        </div>
+        <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (punches.length === 0) { %>
+              <tr><td colspan="2">No punches yet.</td></tr>
+            <% } else { %>
+              <% punches.forEach(function(p) { %>
+                <tr>
+                  <td><%= toLocalString(p.punched_at) %></td>
+                  <td><%= p.punch_type %></td>
+                </tr>
+              <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+        </div>
+      </section>
+
+      <% if (user.is_admin) { %>
+        <section class="card">
+          <h2>Admin tools</h2>
+          <div class="button-row">
+            <a href="/admin/employees" class="btn btn-outline">Manage Employees</a>
+            <a href="/admin/punches" class="btn btn-outline">View Recent Punches</a>
+            <a href="/admin/export" class="btn btn-outline">Export Timesheet</a>
+          </div>
+        </section>
+      <% } %>
+    </main>
+  </body>
+  <script>
+    (function() {
+      var el = document.getElementById('ny-clock');
+      function tick() {
+        var s = new Date().toLocaleString('en-US', {
+          timeZone: 'America/New_York',
+          hour12: true,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        if (el) el.textContent = s;
+      }
+      tick();
+      setInterval(tick, 1000);
+    })();
+  </script>
+</html>

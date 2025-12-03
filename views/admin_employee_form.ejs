@@ -1,0 +1,64 @@
+<%-
+  include('layout', {
+    title: employee ? 'Edit Employee' : 'Add Employee',
+    user,
+    body: `
+      <section class="card">
+        <h1>${employee ? 'Edit Employee' : 'Add Employee'}</h1>
+        ${
+          error ? `<div class="alert">${error}</div>` : ''
+        }
+        <form method="post" action="${employee ? `/admin/employees/${employee.id}` : '/admin/employees/new'}" class="form">
+          <label>
+            Full Name
+            <input type="text" name="name" value="${employee ? employee.name : ''}" required />
+          </label>
+          <label>
+            Email
+            <input type="email" name="email" value="${employee ? employee.email : ''}" required />
+          </label>
+          <label>
+            Username
+            <input type="text" name="username" value="${employee ? employee.username : ''}" required />
+          </label>
+          <label>
+            Password ${employee ? '(leave blank to keep current)' : ''}
+            <input type="password" name="password" />
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" name="is_admin" ${employee && employee.is_admin ? 'checked' : ''} />
+            Administrator
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" name="active" ${!employee || employee.active ? 'checked' : ''} />
+            Active
+          </label>
+
+          <div class="button-row">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a href="/admin/employees" class="btn btn-outline">Cancel</a>
+          </div>
+        </form>
+      </section>
+      ${employee ? `
+      <section class=\"card\" style=\"border: 2px solid #fecaca; background: #fff1f2;\">
+        <h2>Delete Employee</h2>
+        <p style=\"font-size: 0.9rem; color: #7f1d1d;\">Choose how you want to remove this employee.</p>
+        <form method=\"post\" action=\"/admin/employees/${employee.id}/delete\" class=\"form\">
+          <label class=\"checkbox\">
+            <input type=\"checkbox\" name=\"remove_from_list\" /> Remove from list (keep time data)
+          </label>
+          <label class=\"checkbox\">
+            <input type=\"checkbox\" name=\"erase_data\" /> Remove including all time data
+          </label>
+          <div class=\"button-row\">
+            <button type=\"submit\" class=\"btn btn-danger\">Delete</button>
+          </div>
+        </form>
+      </section>
+      ` : ''}
+    `
+  })
+%>
+
+

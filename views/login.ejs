@@ -1,0 +1,25 @@
+<%-
+  include('layout', {
+    title: 'Login',
+    user: null,
+    body: `
+      <section class="card">
+        <h1>Employee Login</h1>
+        ${error ? `<div class="alert">${error}</div>` : ''}
+        <form method="post" action="/login" class="form">
+          <label>
+            Username
+            <input type="text" name="username" autocomplete="username" required />
+          </label>
+          <label>
+            Password
+            <input type="password" name="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit" class="btn btn-primary">Log in</button>
+        </form>
+      </section>
+    `
+  })
+%>
+
+

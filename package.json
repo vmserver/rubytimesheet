@@ -1,0 +1,31 @@
+{
+  "name": "timesheet-web-app",
+  "version": "1.0.0",
+  "description": "Simple web-based timesheet with punch in/out and breaks, with admin employee management.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "reset:activity": "node scripts/reset-activity.js"
+  },
+  "keywords": [
+    "timesheet",
+    "express",
+    "render"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "connect-pg-simple": "^9.0.0",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "exceljs": "4.4.0",
+    "express": "^4.21.1",
+    "express-session": "^1.18.1",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}

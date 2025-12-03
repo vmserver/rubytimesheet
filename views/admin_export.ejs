@@ -1,0 +1,31 @@
+<%-
+  include('layout', {
+    title: 'Export Timesheet',
+    user,
+    body: `
+      <section class=\"card\">
+        <div class=\"card-header\">
+          <h2>Export Timesheet</h2>
+        </div>
+        <form method=\"get\" action=\"/admin/export.xlsx\" class=\"date-range-form\">
+          <label for=\"exportStart\">From:</label>
+          <input type=\"date\" id=\"exportStart\" name=\"startDate\" />
+          
+          <label for=\"exportEnd\">To:</label>
+          <input type=\"date\" id=\"exportEnd\" name=\"endDate\" />
+
+          <button type=\"submit\" class=\"btn btn-primary\">Export Excel</button>
+        </form>
+        <script>
+          document.addEventListener('DOMContentLoaded', function() {
+            var today = new Date().toISOString().split('T')[0];
+            var s = document.getElementById('exportStart');
+            var e = document.getElementById('exportEnd');
+            if (s) s.setAttribute('max', today);
+            if (e) e.setAttribute('max', today);
+          });
+        </script>
+      </section>
+    `
+  })
+%>

@@ -1,0 +1,53 @@
+<%-
+  include('layout', {
+    title: 'Employees',
+    user,
+    body: `
+      <section class="card">
+        <div class="card-header">
+          <h1>Employees</h1>
+          <a href="/admin/employees/new" class="btn btn-primary">Add Employee</a>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Admin</th>
+              <th>Active</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              employees.length === 0
+                ? '<tr><td colspan="8">No employees yet.</td></tr>'
+                : employees
+                    .map(
+                      (e) => `
+              <tr>
+                <td>${e.id}</td>
+                <td>${e.name}</td>
+                <td>${e.username}</td>
+                <td>${e.email}</td>
+                <td>${e.is_admin ? 'Yes' : 'No'}</td>
+                <td>${e.active ? 'Yes' : 'No'}</td>
+                <td>${new Date(e.created_at).toLocaleString('en-US')}</td>
+                <td>
+                  <a href="/admin/employees/${e.id}" class="btn btn-outline">Edit</a>
+                </td>
+              </tr>`
+                    )
+                    .join('')
+            }
+          </tbody>
+        </table>
+      </section>
+    `
+  })
+%>
+
+
