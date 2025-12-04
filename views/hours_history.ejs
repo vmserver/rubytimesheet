@@ -36,6 +36,22 @@
         font-size: 0.85rem;
         padding: 0.4rem 0.8rem;
       }
+      @media (max-width: 640px) {
+        .date-range-form {
+          display: grid;
+          grid-template-columns: 1fr;
+          align-items: start;
+        }
+        .date-range-form label,
+        .date-range-form input[type="date"],
+        .date-range-form .btn {
+          width: 100%;
+        }
+        .quick-filters {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+      }
     </style>
   </head>
   <body>

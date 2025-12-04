@@ -23,7 +23,7 @@
       <% } %>
     </header>
 
-    <main class="container">
+    <main class="container dashboard">
       <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
         <div class="alert"><%= errorMessage %></div>
       <% } %>
@@ -41,11 +41,12 @@
         <% if (typeof isOnBreak !== 'undefined' && isOnBreak) { %>
           <p class="status-message status-break">⏸ On break</p>
         <% } %>
-        <div style="margin: 1rem 0; padding: 0.75rem; background: #f0f9ff; border-radius: 0.5rem; border-left: 4px solid #2563eb;">
-          <strong>Today's Hours:</strong> <span style="font-size: 1.2rem; font-weight: bold; color: #2563eb;"><%= typeof todayHours !== 'undefined' ? todayHours : '0.00' %> hours</span>
+        <div class="hours-callout">
+          <span class="label">Today's Hours:</span>
+          <span class="value"><%= typeof todayHours !== 'undefined' ? todayHours : '0.00' %> hours</span>
         </div>
 
-        <div class="button-row">
+        <div class="button-row punch-controls">
           <form method="post" action="/punch/in">
             <button type="submit" class="btn btn-success" <% if (typeof isPunchedIn !== 'undefined' && isPunchedIn) { %>disabled<% } %>>Punch In</button>
           </form>
@@ -74,8 +75,8 @@
       </section>
 
       <section class="card recent-activity">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-          <h2 style="margin: 0;">Recent activity</h2>
+        <div class="card-header">
+          <h2>Recent activity</h2>
           <a href="/hours" class="btn btn-outline">View Previous Days</a>
         </div>
         <div class="table-scroll">
@@ -103,7 +104,7 @@
       </section>
 
       <% if (user.is_admin) { %>
-        <section class="card">
+        <section class="card admin-tools">
           <h2>Admin tools</h2>
           <div class="button-row">
             <a href="/admin/employees" class="btn btn-outline">Manage Employees</a>
