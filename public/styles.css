@@ -286,12 +286,25 @@ input[type='email'] {
 .clock {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-weight: 600;
-  padding: 0.25rem 0.6rem;
+  padding: 0.35rem 0.6rem;
   border-radius: 0.5rem;
   background: #111827;
   color: #fff;
   min-width: 6.5rem;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
+  line-height: 1.3;
+}
+.clock .clock-time {
+  letter-spacing: 0.5px;
+}
+.clock .clock-date {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: #e5e7eb;
+  margin-top: 2px;
 }
 
 .hours-callout {
@@ -413,7 +426,7 @@ input[type='email'] {
     justify-self: end;
     font-size: 0.95rem;
     min-width: 5.5rem;
-    line-height: 1.6;
+    line-height: 1.4;
   }
   .dashboard .button-row {
     display: grid;

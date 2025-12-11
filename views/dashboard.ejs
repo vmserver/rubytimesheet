@@ -31,7 +31,10 @@
       <section class="card">
         <div class="card-header">
           <h1>Hi <%= user.name %>, record your time</h1>
-          <div id="ny-clock" class="clock"></div>
+          <div class="clock" id="ny-clock">
+            <div class="clock-time" id="ny-clock-time"></div>
+            <div class="clock-date" id="ny-clock-date"></div>
+          </div>
         </div>
         <% if (typeof isPunchedIn !== 'undefined' && isPunchedIn) { %>
           <p class="status-message status-in">✓ Currently punched in</p>
@@ -117,7 +120,8 @@
   </body>
   <script>
     (function() {
-      var el = document.getElementById('ny-clock');
+      var tEl = document.getElementById('ny-clock-time');
+      var dEl = document.getElementById('ny-clock-date');
       function tick() {
         var s = new Date().toLocaleString('en-US', {
           timeZone: 'America/New_York',
@@ -126,7 +130,14 @@
           minute: '2-digit',
           second: '2-digit'
         });
-        if (el) el.textContent = s;
+        if (tEl) tEl.textContent = s;
+        var d = new Date().toLocaleDateString('en-US', {
+          timeZone: 'America/New_York',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        if (dEl) dEl.textContent = d;
       }
       tick();
       setInterval(tick, 1000);

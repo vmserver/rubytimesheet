@@ -116,6 +116,18 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(async (req, res, next) => {
+  try {
+    if (req.session && req.session.user && !req.session.rollover_checked) {
+      await ensureBackfillForUser(req.session.user.id, 7);
+      req.session.rollover_checked = true;
+    }
+  } catch (e) {
+  } finally {
+    next();
+  }
+});
+
 // Helper to get current user
 function requireAuth(req, res, next) {
   if (!req.session.user) {
@@ -296,6 +308,93 @@ function parseNYDateToUTC(dateString) {
   const targetLocal = new Date(targetNYDate.getTime() + offset);
   
   return targetLocal;
+}
+
+function getNYEndOfDayUTCFromMMDDYYYY(mmddyyyy) {
+  const [month, day, year] = mmddyyyy.split('/').map(Number);
+  const offsetMin = (() => {
+    const probe = new Date(Date.UTC(year, month - 1, day, 12));
+    const s = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, timeZoneName: 'shortOffset', hour: '2-digit', minute: '2-digit' }).format(probe);
+    const m = s.match(/GMT([+-]\d+)/);
+    const hours = m ? parseInt(m[1], 10) : -5;
+    return hours * 60;
+  })();
+  const utcMillis = Date.UTC(year, month - 1, day, 23, 59, 59) + (-offsetMin) * 60 * 1000;
+  return new Date(utcMillis);
+}
+
+function nyLocalToUTC(y, m, d, h = 0, mi = 0, s = 0) {
+  const probe = new Date(Date.UTC(y, m - 1, d, 12));
+  const str = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, timeZoneName: 'shortOffset', hour: '2-digit', minute: '2-digit' }).format(probe);
+  const mm = str.match(/GMT([+-]\d+)/);
+  const hours = mm ? parseInt(mm[1], 10) : -5;
+  const offsetMin = hours * 60;
+  const utcMillis = Date.UTC(y, m - 1, d, h, mi, s) + (-offsetMin) * 60 * 1000;
+  return new Date(utcMillis);
+}
+
+function getStateAt(punches, boundaryUTC) {
+  const arr = punches.filter((p) => new Date(p.punched_at) <= boundaryUTC).sort((a, b) => new Date(a.punched_at) - new Date(b.punched_at));
+  let state = 'out';
+  let onBreak = false;
+  for (const p of arr) {
+    const t = p.punch_type;
+    if (t === 'in') {
+      state = 'in';
+      onBreak = false;
+    } else if (t === 'break_start') {
+      if (state === 'in') {
+        onBreak = true;
+        state = 'break';
+      }
+    } else if (t === 'break_end') {
+      state = 'in';
+      onBreak = false;
+    } else if (t === 'out') {
+      state = 'out';
+      onBreak = false;
+    }
+  }
+  return state;
+}
+
+async function ensureBackfillForUser(userId, days = 7) {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const y = parseInt(parts.find((p) => p.type === 'year').value);
+  const m = parseInt(parts.find((p) => p.type === 'month').value);
+  const d = parseInt(parts.find((p) => p.type === 'day').value);
+  const startUTC = nyLocalToUTC(y, m, d - days, 0, 0, 0);
+  const endUTC = nyLocalToUTC(y, m, d, 0, 0, 0);
+  const { rows: punches } = await pool.query(
+    `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3 ORDER BY punched_at ASC`,
+    [userId, startUTC, now]
+  );
+  let inserted = 0;
+  for (let i = days; i >= 1; i--) {
+    const boundary = nyLocalToUTC(y, m, d - (i - 1), 0, 0, 0);
+    const state = getStateAt(punches, boundary);
+    if (state === 'in' || state === 'break') {
+      const outTime = new Date(boundary.getTime() - 1000);
+      const inTime = boundary;
+      const windowStart = new Date(outTime.getTime() - 2000);
+      const windowEnd = new Date(inTime.getTime() + 2000);
+      const { rows: exists } = await pool.query(
+        `SELECT 1 FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3 LIMIT 1`,
+        [userId, windowStart, windowEnd]
+      );
+      if (exists.length === 0) {
+        await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'out', outTime]);
+        await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'in', inTime]);
+        if (state === 'break') {
+          const bs = new Date(inTime.getTime() + 1000);
+          await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'break_start', bs]);
+        }
+        inserted++;
+      }
+    }
+  }
+  return inserted;
 }
 
 // Routes
@@ -791,6 +890,217 @@ app.get('/health', async (req, res) => {
   });
 });
 
+app.get('/dev/login-with-token', async (req, res) => {
+  const token = req.query.token;
+  if (!token || token !== (process.env.DEV_TEST_TOKEN || '')) return res.status(403).send('Forbidden');
+  const { rows } = await pool.query('SELECT id, name, username, is_admin FROM employees WHERE is_admin = TRUE LIMIT 1');
+  if (rows.length === 0) return res.status(500).send('No admin available');
+  req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin };
+  res.redirect('/dashboard');
+});
+
+app.get('/dev/simulate-cross-midnight', async (req, res) => {
+  const token = req.query.token;
+  let user = req.session.user;
+  if (!user && token && token === (process.env.DEV_TEST_TOKEN || '')) {
+    const { rows } = await pool.query('SELECT id, name, username, is_admin FROM employees WHERE is_admin = TRUE LIMIT 1');
+    if (rows.length === 0) return res.status(500).send('No admin available');
+    req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin };
+    user = req.session.user;
+  }
+  if (!user) return res.status(403).send('Forbidden');
+  const state = req.query.state === 'break' ? 'break' : 'in';
+  const userId = user.id;
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const y = parseInt(parts.find(p => p.type === 'year').value);
+  const m = parseInt(parts.find(p => p.type === 'month').value);
+  const d = parseInt(parts.find(p => p.type === 'day').value);
+  const inTime = nyLocalToUTC(y, m, d - 1, 23, 0, 0);
+  const dupWindowStart = new Date(inTime.getTime() - 1000);
+  const dupWindowEnd = new Date(inTime.getTime() + 1000);
+  const { rows: exists } = await pool.query(
+    `SELECT 1 FROM punches WHERE employee_id = $1 AND punch_type = 'in' AND punched_at BETWEEN $2 AND $3 LIMIT 1`,
+    [userId, dupWindowStart, dupWindowEnd]
+  );
+  if (exists.length === 0) {
+    await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [userId, 'in', inTime]);
+  }
+  let breakStart = null;
+  if (state === 'break') {
+    breakStart = new Date(inTime.getTime() + 30 * 60 * 1000);
+    const { rows: brExists } = await pool.query(
+      `SELECT 1 FROM punches WHERE employee_id = $1 AND punch_type = 'break_start' AND punched_at BETWEEN $2 AND $3 LIMIT 1`,
+      [userId, new Date(breakStart.getTime() - 1000), new Date(breakStart.getTime() + 1000)]
+    );
+    if (brExists.length === 0) {
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [userId, 'break_start', breakStart]);
+    }
+  }
+  if (req.query.json === '1') {
+    return res.json({ inserted: { in: inTime.toISOString(), break_start: breakStart ? breakStart.toISOString() : null } });
+  }
+  res.redirect('/hours');
+});
+
+app.get('/dev/recent', async (req, res) => {
+  const token = req.query.token;
+  let user = req.session.user;
+  if (!user && token && token === (process.env.DEV_TEST_TOKEN || '')) {
+    const { rows } = await pool.query('SELECT id, name, username, is_admin FROM employees WHERE is_admin = TRUE LIMIT 1');
+    if (rows.length === 0) return res.status(500).send('No admin available');
+    req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin };
+    user = req.session.user;
+  }
+  if (!user) return res.status(403).send('Forbidden');
+  const count = Math.max(1, Math.min(parseInt(req.query.count || '10', 10), 50));
+  const { rows } = await pool.query(
+    `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 ORDER BY punched_at DESC LIMIT ${count}`,
+    [user.id]
+  );
+  const fmt = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const recent = rows.map(r => ({ punch_type: r.punch_type, punched_at: r.punched_at, ny: fmt.format(new Date(r.punched_at)) }));
+  res.json({ recent });
+});
+
+app.get('/dev/seed-midnight', async (req, res) => {
+  const token = req.query.token;
+  let user = req.session.user;
+  if (!user && token && token === (process.env.DEV_TEST_TOKEN || '')) {
+    const { rows } = await pool.query('SELECT id, name, username, is_admin FROM employees WHERE is_admin = TRUE LIMIT 1');
+    if (rows.length === 0) return res.status(500).send('No admin available');
+    req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin };
+    user = req.session.user;
+  }
+  if (!user) return res.status(403).send('Forbidden');
+  const state = req.query.state === 'break' ? 'break' : 'in';
+  const countOnly = req.query.dry === '1';
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const y = parseInt(parts.find(p => p.type === 'year').value);
+  const m = parseInt(parts.find(p => p.type === 'month').value);
+  const d = parseInt(parts.find(p => p.type === 'day').value);
+  const userId = user.id;
+  const inYesterday = nyLocalToUTC(y, m, d - 1, 23, 0, 0);
+  const outYesterday = nyLocalToUTC(y, m, d - 1, 23, 59, 59);
+  const inToday = nyLocalToUTC(y, m, d, 0, 0, 0);
+  const breakStartToday = nyLocalToUTC(y, m, d, 0, 0, 1);
+  const windowStart = new Date(outYesterday.getTime() - 2000);
+  const windowEnd = new Date(inToday.getTime() + 2000);
+  const { rows: existing } = await pool.query(
+    `SELECT 1 FROM punches WHERE employee_id=$1 AND punched_at BETWEEN $2 AND $3 LIMIT 1`,
+    [userId, windowStart, windowEnd]
+  );
+  let inserted = 0;
+  if (!countOnly && existing.length === 0) {
+    await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [userId, 'in', inYesterday]);
+    await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [userId, 'out', outYesterday]);
+    await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [userId, 'in', inToday]);
+    if (state === 'break') {
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [userId, 'break_start', breakStartToday]);
+    }
+    inserted = state === 'break' ? 4 : 3;
+  }
+  res.json({
+    ok: true,
+    dedupSkipped: existing.length > 0,
+    insertedCount: inserted,
+    timestampsUTC: {
+      inYesterday: inYesterday.toISOString(),
+      outYesterday: outYesterday.toISOString(),
+      inToday: inToday.toISOString(),
+      breakStartToday: state === 'break' ? breakStartToday.toISOString() : null
+    }
+  });
+});
+
+app.get('/dev/clear-punches', async (req, res) => {
+  const token = req.query.token;
+  let user = req.session.user;
+  if (!user && token && token === (process.env.DEV_TEST_TOKEN || '')) {
+    const { rows } = await pool.query('SELECT id, name, username, is_admin FROM employees WHERE is_admin = TRUE LIMIT 1');
+    if (rows.length === 0) return res.status(500).send('No admin available');
+    req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin };
+    user = req.session.user;
+  }
+  if (!user) return res.status(403).send('Forbidden');
+  const userId = user.id;
+  const { rowCount } = await pool.query('DELETE FROM punches WHERE employee_id = $1', [userId]);
+  res.json({ ok: true, cleared: rowCount });
+});
+
+app.get('/dev/purge-midnight-window', async (req, res) => {
+  const token = req.query.token;
+  let user = req.session.user;
+  if (!user && token && token === (process.env.DEV_TEST_TOKEN || '')) {
+    const { rows } = await pool.query('SELECT id, name, username, is_admin FROM employees WHERE is_admin = TRUE LIMIT 1');
+    if (rows.length === 0) return res.status(500).send('No admin available');
+    req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin };
+    user = req.session.user;
+  }
+  if (!user) return res.status(403).send('Forbidden');
+  const minutes = Math.max(1, Math.min(parseInt(req.query.minutes || '2', 10), 60));
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const y = parseInt(parts.find(p => p.type === 'year').value);
+  const m = parseInt(parts.find(p => p.type === 'month').value);
+  const d = parseInt(parts.find(p => p.type === 'day').value);
+  const todayStartUTC = nyLocalToUTC(y, m, d, 0, 0, 0);
+  const endYesterdayUTC = nyLocalToUTC(y, m, d - 1, 23, 59, 59);
+  const windowStart = new Date(endYesterdayUTC.getTime() - minutes * 60 * 1000);
+  const windowEnd = new Date(todayStartUTC.getTime() + minutes * 60 * 1000);
+  const { rowCount } = await pool.query('DELETE FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3', [user.id, windowStart, windowEnd]);
+  res.json({
+    ok: true,
+    minutes,
+    window: { start: windowStart.toISOString(), end: windowEnd.toISOString() },
+    deleted: rowCount
+  });
+});
+app.get('/dev/rollover-dry-run', async (req, res) => {
+  const token = req.query.token;
+  if (!token || token !== (process.env.DEV_TEST_TOKEN || '')) return res.status(403).send('Forbidden');
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const y = parseInt(parts.find(p => p.type === 'year').value);
+  const m = parseInt(parts.find(p => p.type === 'month').value);
+  const d = parseInt(parts.find(p => p.type === 'day').value);
+  const todayStartUTC = nyLocalToUTC(y, m, d, 0, 0, 0);
+  const endYesterdayUTC = nyLocalToUTC(y, m, d - 1, 23, 59, 59);
+  const { rows: employees } = await pool.query('SELECT id FROM employees WHERE active = TRUE');
+  const results = [];
+  for (const emp of employees) {
+    const { rows: recent } = await pool.query(
+      `SELECT punch_type FROM punches WHERE employee_id = $1 ORDER BY punched_at DESC LIMIT 1`,
+      [emp.id]
+    );
+    if (recent.length === 0) continue;
+    const lastType = recent[0].punch_type;
+    let wouldInsert = [];
+    if (lastType === 'in') {
+      wouldInsert = ['out', 'in'];
+    } else if (lastType === 'break_start') {
+      wouldInsert = ['out', 'in', 'break_start'];
+    }
+    results.push({ employee_id: emp.id, lastType, actions: wouldInsert, window: { start: endYesterdayUTC.toISOString(), end: todayStartUTC.toISOString() } });
+  }
+  res.json({ ok: true, results });
+});
+
+app.get('/dev/backfill-now', async (req, res) => {
+  const token = req.query.token;
+  let user = req.session.user;
+  if (!user && token && token === (process.env.DEV_TEST_TOKEN || '')) {
+    const { rows } = await pool.query('SELECT id, name, username, is_admin FROM employees WHERE is_admin = TRUE LIMIT 1');
+    if (rows.length === 0) return res.status(500).send('No admin available');
+    req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin };
+    user = req.session.user;
+  }
+  if (!user) return res.status(403).send('Forbidden');
+  const days = Math.max(1, Math.min(parseInt(req.query.days || '7', 10), 30));
+  const count = await ensureBackfillForUser(user.id, days);
+  res.json({ ok: true, backfilledDays: count });
+});
 // Admin: new employee form
 app.get('/admin/employees/new', requireAuth, requireAdmin, (req, res) => {
   res.render('admin_employee_form', {
@@ -1219,7 +1529,8 @@ app.get('/hours', requireAuth, async (req, res) => {
       const stillPunchedIn = isToday && 
         (lastPunch.punch_type === 'in' || lastPunch.punch_type === 'break_end' || lastPunch.punch_type === 'break_start');
       
-      const hours = calculateHours(dayPunches, stillPunchedIn ? now : null);
+      const effectiveEnd = stillPunchedIn ? now : (!isToday ? getNYEndOfDayUTCFromMMDDYYYY(date) : null);
+      const hours = calculateHours(dayPunches, effectiveEnd);
       const minutes = hours * 60;
       console.log(`✅ Calculated hours for ${date}: ${hours.toFixed(4)} hours (${dayPunches.length} punches)`);
       console.log(`   Punch types: ${dayPunches.map(p => p.punch_type).join(', ')}`);
@@ -1465,11 +1776,92 @@ app.get('/admin/punches', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+async function performMidnightRollover(now = new Date()) {
+  const nyFormatter = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const parts = nyFormatter.formatToParts(now);
+  const y = parseInt(parts.find(p => p.type === 'year').value);
+  const m = parseInt(parts.find(p => p.type === 'month').value);
+  const d = parseInt(parts.find(p => p.type === 'day').value);
+  const todayStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const offsetMin = (() => {
+    const probe = new Date(Date.UTC(y, m - 1, d, 12));
+    const s = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, timeZoneName: 'shortOffset', hour: '2-digit', minute: '2-digit' }).format(probe);
+    const mm = s.match(/GMT([+-]\d+)/);
+    const hours = mm ? parseInt(mm[1], 10) : -5;
+    return hours * 60;
+  })();
+  const todayStartUTC = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) + (-offsetMin) * 60 * 1000);
+  const endYesterdayUTC = new Date(Date.UTC(y, m - 1, d - 1, 23, 59, 59) + (-offsetMin) * 60 * 1000);
+
+  const { rows: employees } = await pool.query('SELECT id FROM employees WHERE active = TRUE');
+  let affected = 0;
+  for (const emp of employees) {
+    const windowStart = new Date(endYesterdayUTC.getTime() - 2000);
+    const windowEnd = new Date(todayStartUTC.getTime() + 2000);
+    const { rows: existing } = await pool.query(
+      `SELECT 1 FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3 LIMIT 1`,
+      [emp.id, windowStart, windowEnd]
+    );
+    if (existing.length > 0) continue;
+    const { rows: recent } = await pool.query(
+      `SELECT punch_type FROM punches WHERE employee_id = $1 ORDER BY punched_at DESC LIMIT 1`,
+      [emp.id]
+    );
+    if (recent.length === 0) continue;
+    const lastType = recent[0].punch_type;
+    if (lastType === 'in') {
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'in', todayStartUTC]);
+      affected++;
+    } else if (lastType === 'break_start') {
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'in', todayStartUTC]);
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_start', new Date(todayStartUTC.getTime() + 1000)]);
+      affected++;
+    }
+  }
+  return { affected };
+}
+
+function scheduleMidnightRollover() {
+  const now = new Date();
+  const nyParts = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit', second: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const y = parseInt(nyParts.find(p => p.type === 'year').value);
+  const m = parseInt(nyParts.find(p => p.type === 'month').value);
+  const d = parseInt(nyParts.find(p => p.type === 'day').value);
+  const midnightNYUTC = parseNYDateToUTC(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  const nextMidnightUTC = new Date(midnightNYUTC.getTime() + 24 * 60 * 60 * 1000);
+  const delay = nextMidnightUTC.getTime() - now.getTime();
+  setTimeout(async () => {
+    try {
+      await performMidnightRollover(new Date());
+    } finally {
+      scheduleMidnightRollover();
+    }
+  }, Math.max(1000, delay));
+}
+
+app.post('/admin/rollover-now', async (req, res) => {
+  const token = req.query.token;
+  if (!req.session.user) {
+    if (!token || token !== (process.env.DEV_TEST_TOKEN || '')) return res.status(403).send('Forbidden');
+  } else {
+    if (!req.session.user.is_admin) return res.status(403).send('Forbidden');
+  }
+  try {
+    const r = await performMidnightRollover(new Date());
+    res.json({ ok: true, affected: r.affected });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Start server
 initDb()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Timesheet app listening on port ${PORT}`);
+      scheduleMidnightRollover();
     });
   })
   .catch((err) => {
