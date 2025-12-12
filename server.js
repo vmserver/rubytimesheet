@@ -1814,6 +1814,8 @@ async function performMidnightRollover(now = new Date()) {
       await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'in', todayStartUTC]);
       affected++;
     } else if (lastType === 'break_start') {
+      const breakEndUTC = new Date(endYesterdayUTC.getTime() - 1000);
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_end', breakEndUTC]);
       await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
       await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'in', todayStartUTC]);
       await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_start', new Date(todayStartUTC.getTime() + 1000)]);

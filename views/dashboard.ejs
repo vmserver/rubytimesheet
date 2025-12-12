@@ -54,7 +54,7 @@
             <button type="submit" class="btn btn-success" <% if (typeof isPunchedIn !== 'undefined' && isPunchedIn) { %>disabled<% } %>>Punch In</button>
           </form>
           <form method="post" action="/punch/out">
-            <button type="submit" class="btn btn-danger" <% if (typeof isPunchedIn === 'undefined' || !isPunchedIn) { %>disabled<% } %>>Punch Out</button>
+            <button type="submit" class="btn btn-danger" <% if ((typeof isPunchedIn === 'undefined' || !isPunchedIn) || (typeof isOnBreak !== 'undefined' && isOnBreak)) { %>disabled<% } %>>Punch Out</button>
           </form>
           <form method="post" action="/punch/break_start">
             <button
