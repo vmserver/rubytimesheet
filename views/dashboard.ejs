@@ -31,12 +31,14 @@
       <section class="card">
         <div class="card-header">
           <h1>Hi <%= user.name %>, record your time</h1>
-          <div class="clock" id="ny-clock">
-            <div class="clock-time">
-              <span class="clock-time-main" id="ny-clock-time"></span>
-              <span class="clock-ampm" id="ny-clock-ampm"></span>
+          <div class="clock-pill" id="ny-clock">
+            <div class="clock-pill-time">
+              <span class="time-main" id="ny-time-main"></span>
+              <span class="time-ampm" id="ny-time-ampm"></span>
             </div>
-            <div class="clock-date" id="ny-clock-date"></div>
+            <div class="clock-pill-date">
+              <span class="date-text" id="ny-date-full"></span>
+            </div>
           </div>
         </div>
         <% if (typeof isPunchedIn !== 'undefined' && isPunchedIn) { %>
@@ -123,30 +125,32 @@
   </body>
   <script>
     (function() {
-      var tMain = document.getElementById('ny-clock-time');
-      var tAmPm = document.getElementById('ny-clock-ampm');
-      var dEl = document.getElementById('ny-clock-date');
+      var tMain = document.getElementById('ny-time-main');
+      var tAmPm = document.getElementById('ny-time-ampm');
+      var dText = document.getElementById('ny-date-full');
       function tick() {
+        var now = new Date();
         var parts = new Intl.DateTimeFormat('en-US', {
           timeZone: 'America/New_York',
           hour12: true,
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit'
-        }).formatToParts(new Date());
+        }).formatToParts(now);
         var hh = parts.find(p => p.type === 'hour')?.value || '';
         var mm = parts.find(p => p.type === 'minute')?.value || '';
         var ss = parts.find(p => p.type === 'second')?.value || '';
         var dp = parts.find(p => p.type === 'dayPeriod')?.value || '';
         if (tMain) tMain.textContent = hh + ':' + mm + ':' + ss;
-        if (tAmPm) tAmPm.textContent = dp.toUpperCase();
-        var d = new Intl.DateTimeFormat('en-US', {
+        if (tAmPm) tAmPm.textContent = dp ? dp.toUpperCase() : '';
+        var dateStr = new Intl.DateTimeFormat('en-US', {
           timeZone: 'America/New_York',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit'
-        }).format(new Date());
-        if (dEl) dEl.textContent = d;
+          weekday: 'short',
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric'
+        }).format(now);
+        if (dText) dText.textContent = dateStr;
       }
       tick();
       setInterval(tick, 1000);
