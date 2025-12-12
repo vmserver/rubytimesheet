@@ -36,6 +36,7 @@
               <span class="time-main" id="ny-time-main"></span>
               <span class="time-ampm" id="ny-time-ampm"></span>
             </div>
+            <span class="clock-divider" aria-hidden="true"></span>
             <div class="clock-pill-date">
               <span class="date-text" id="ny-date-full"></span>
             </div>
@@ -143,16 +144,12 @@
         var dp = parts.find(p => p.type === 'dayPeriod')?.value || '';
         if (tMain) tMain.textContent = hh + ':' + mm + ':' + ss;
         if (tAmPm) tAmPm.textContent = dp ? dp.toUpperCase() : '';
-        var dParts = new Intl.DateTimeFormat('en-US', {
+        var dateStr = new Intl.DateTimeFormat('en-US', {
           timeZone: 'America/New_York',
-          month: 'short',
+          month: '2-digit',
           day: '2-digit',
           year: 'numeric'
-        }).formatToParts(now);
-        var mo = dParts.find(p => p.type === 'month')?.value || '';
-        var da = dParts.find(p => p.type === 'day')?.value || '';
-        var ye = dParts.find(p => p.type === 'year')?.value || '';
-        var dateStr = mo + ', ' + da + ' ' + ye;
+        }).format(now);
         if (dText) dText.textContent = dateStr;
       }
       tick();

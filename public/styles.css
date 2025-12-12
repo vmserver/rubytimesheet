@@ -337,9 +337,10 @@ input[type='email'] {
 
 .clock-pill {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 0.12rem;
+  justify-content: center;
+  gap: 0.25rem;
   padding: 0.38rem 0.55rem;
   border-radius: 0.6rem;
   background: #ffffff;
@@ -349,16 +350,47 @@ input[type='email'] {
 }
 .clock-pill-time {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.25rem;
+  line-height: 1;
 }
 .clock-pill-date {
   display: inline-flex;
   align-items: center;
+  order: 1;
+  line-height: 1;
+}
+.clock-pill-date .date-text {
+  display: flex;
+  align-items: center;
+  line-height: 1;
+  font-weight: 600;
+  color: #334155;
+  letter-spacing: 0;
+  transform: translateY(-1px);
+}
+.clock-pill-time { order: 3; }
+.clock-divider {
+  order: 2;
+  display: inline-block;
+  width: 1px;
+  height: 1.6em;
+  background: linear-gradient(180deg, #e5e7eb 0%, #cbd5e1 50%, #e5e7eb 100%);
+  border-radius: 1px;
+  margin: 0 2px;
 }
 
 .dashboard .clock-pill {
   justify-self: end;
+}
+
+@media (max-width: 640px) {
+  .dashboard .clock-pill {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.12rem;
+  }
+  .clock-divider { display: none; }
 }
 .time-pill {
   display: inline-flex;
