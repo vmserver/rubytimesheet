@@ -143,13 +143,16 @@
         var dp = parts.find(p => p.type === 'dayPeriod')?.value || '';
         if (tMain) tMain.textContent = hh + ':' + mm + ':' + ss;
         if (tAmPm) tAmPm.textContent = dp ? dp.toUpperCase() : '';
-        var dateStr = new Intl.DateTimeFormat('en-US', {
+        var dParts = new Intl.DateTimeFormat('en-US', {
           timeZone: 'America/New_York',
-          weekday: 'short',
           month: 'short',
           day: '2-digit',
           year: 'numeric'
-        }).format(now);
+        }).formatToParts(now);
+        var mo = dParts.find(p => p.type === 'month')?.value || '';
+        var da = dParts.find(p => p.type === 'day')?.value || '';
+        var ye = dParts.find(p => p.type === 'year')?.value || '';
+        var dateStr = mo + ', ' + da + ' ' + ye;
         if (dText) dText.textContent = dateStr;
       }
       tick();
