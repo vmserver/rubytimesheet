@@ -32,7 +32,10 @@
         <div class="card-header">
           <h1>Hi <%= user.name %>, record your time</h1>
           <div class="clock" id="ny-clock">
-            <div class="clock-time" id="ny-clock-time"></div>
+            <div class="clock-time">
+              <span class="clock-time-main" id="ny-clock-time"></span>
+              <span class="clock-ampm" id="ny-clock-ampm"></span>
+            </div>
             <div class="clock-date" id="ny-clock-date"></div>
           </div>
         </div>
@@ -120,23 +123,29 @@
   </body>
   <script>
     (function() {
-      var tEl = document.getElementById('ny-clock-time');
+      var tMain = document.getElementById('ny-clock-time');
+      var tAmPm = document.getElementById('ny-clock-ampm');
       var dEl = document.getElementById('ny-clock-date');
       function tick() {
-        var s = new Date().toLocaleString('en-US', {
+        var parts = new Intl.DateTimeFormat('en-US', {
           timeZone: 'America/New_York',
           hour12: true,
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit'
-        });
-        if (tEl) tEl.textContent = s;
-        var d = new Date().toLocaleDateString('en-US', {
+        }).formatToParts(new Date());
+        var hh = parts.find(p => p.type === 'hour')?.value || '';
+        var mm = parts.find(p => p.type === 'minute')?.value || '';
+        var ss = parts.find(p => p.type === 'second')?.value || '';
+        var dp = parts.find(p => p.type === 'dayPeriod')?.value || '';
+        if (tMain) tMain.textContent = hh + ':' + mm + ':' + ss;
+        if (tAmPm) tAmPm.textContent = dp.toUpperCase();
+        var d = new Intl.DateTimeFormat('en-US', {
           timeZone: 'America/New_York',
           year: 'numeric',
           month: '2-digit',
           day: '2-digit'
-        });
+        }).format(new Date());
         if (dEl) dEl.textContent = d;
       }
       tick();

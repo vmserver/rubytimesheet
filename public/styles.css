@@ -285,26 +285,42 @@ input[type='email'] {
 
 .clock {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-weight: 600;
-  padding: 0.35rem 0.6rem;
-  border-radius: 0.5rem;
-  background: #111827;
   color: #fff;
-  min-width: 6.5rem;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  line-height: 1.3;
+  gap: 2px;
+  padding: 0.5rem 0.7rem;
+  min-width: 7.5rem;
+  border-radius: 0.6rem;
+  background: linear-gradient(180deg, #0b1220 0%, #0e1726 100%);
+  border: 1px solid #0f172a;
+  box-shadow: 0 8px 20px -12px rgba(2, 6, 23, 0.6);
 }
 .clock .clock-time {
-  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.clock .clock-time-main {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4px;
+}
+.clock .clock-ampm {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  background: #0b1220;
+  color: #cbd5e1;
+  border: 1px solid #1f2937;
 }
 .clock .clock-date {
-  font-weight: 500;
-  font-size: 0.85rem;
-  color: #e5e7eb;
-  margin-top: 2px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #cbd5e1;
 }
 
 .hours-callout {
@@ -425,8 +441,8 @@ input[type='email'] {
   .dashboard .clock {
     justify-self: end;
     font-size: 0.95rem;
-    min-width: 5.5rem;
-    line-height: 1.4;
+    min-width: 6.5rem;
+    line-height: 1.35;
   }
   .dashboard .button-row {
     display: grid;
