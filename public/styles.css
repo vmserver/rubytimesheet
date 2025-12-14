@@ -170,7 +170,9 @@ input[type='email'] {
   text-decoration: none;
   background: #e5e7eb;
   color: #111827;
-  transition: box-shadow 150ms ease, transform 80ms ease, filter 150ms ease;
+  transition: box-shadow 180ms ease, transform 120ms ease, filter 150ms ease, border-color 150ms ease;
+  will-change: transform, box-shadow;
+  transform-origin: center;
 }
 
 .btn-primary {
@@ -182,36 +184,33 @@ input[type='email'] {
   background: #16a34a;
   color: white;
 }
-.btn-success:hover {
-  box-shadow: 0 6px 16px -12px rgba(15, 23, 42, 0.45);
-}
+.btn-success:hover { border-color: #cbd5e1; box-shadow: 0 10px 20px -14px rgba(15, 23, 42, 0.40); filter: none; transform: translateY(-1px) scale(1.02); }
 .btn-success:active {
-  transform: translateY(1px);
-  box-shadow: 0 4px 12px -12px rgba(15, 23, 42, 0.45);
+  border-color: #9ca3af;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-danger {
   background: #dc2626;
   color: white;
 }
-.btn-danger:hover {
-  box-shadow: 0 6px 16px -12px rgba(15, 23, 42, 0.45);
-}
+.btn-danger:hover { border-color: #cbd5e1; box-shadow: 0 10px 20px -14px rgba(15, 23, 42, 0.40); filter: none; transform: translateY(-1px) scale(1.02); }
 .btn-danger:active {
-  transform: translateY(1px);
-  box-shadow: 0 4px 12px -12px rgba(15, 23, 42, 0.45);
+  border-color: #9ca3af;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-secondary {
   background: #6b7280;
   color: white;
 }
-.btn-secondary:hover {
-  box-shadow: 0 6px 16px -12px rgba(15, 23, 42, 0.45);
-}
+.btn-secondary:hover { border-color: #cbd5e1; box-shadow: 0 10px 20px -14px rgba(15, 23, 42, 0.40); filter: none; transform: translateY(-1px) scale(1.02); }
 .btn-secondary:active {
-  transform: translateY(1px);
-  box-shadow: 0 4px 12px -12px rgba(15, 23, 42, 0.45);
+  border-color: #9ca3af;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-outline {
