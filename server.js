@@ -1087,6 +1087,62 @@ app.get('/dev/rollover-dry-run', async (req, res) => {
   res.json({ ok: true, results });
 });
 
+app.get('/dev/seed-on-break-before-midnight', async (req, res) => {
+  const token = req.query.token;
+  let user = req.session.user;
+  if (!user && token && token === (process.env.DEV_TEST_TOKEN || '')) {
+    const { rows } = await pool.query('SELECT id, name, username, is_admin FROM employees WHERE is_admin = TRUE LIMIT 1');
+    if (rows.length === 0) return res.status(500).send('No admin available');
+    req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin };
+    user = req.session.user;
+  }
+  if (!user) return res.status(403).send('Forbidden');
+
+  try {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+    const y = parseInt(parts.find(p => p.type === 'year').value);
+    const m = parseInt(parts.find(p => p.type === 'month').value);
+    const d = parseInt(parts.find(p => p.type === 'day').value);
+
+    const userId = user.id;
+    const inEarlier = nyLocalToUTC(y, m, d - 1, 20, 0, 0);
+    const breakStartBeforeMidnight = nyLocalToUTC(y, m, d - 1, 22, 0, 0);
+    const endYesterdayUTC = nyLocalToUTC(y, m, d - 1, 23, 59, 59);
+    const todayStartUTC = nyLocalToUTC(y, m, d, 0, 0, 0);
+
+    const windowStart = new Date(endYesterdayUTC.getTime() - 60 * 60 * 1000);
+    const windowEnd = new Date(todayStartUTC.getTime() + 60 * 60 * 1000);
+
+    const { rows: existing } = await pool.query(
+      `SELECT 1 FROM punches WHERE employee_id=$1 AND punched_at BETWEEN $2 AND $3 LIMIT 1`,
+      [userId, windowStart, windowEnd]
+    );
+
+    let inserted = 0;
+    if (existing.length === 0) {
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [userId, 'in', inEarlier]);
+      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [userId, 'break_start', breakStartBeforeMidnight]);
+      inserted = 2;
+    }
+
+    res.json({
+      ok: true,
+      userId,
+      dedupSkipped: existing.length > 0,
+      insertedCount: inserted,
+      timestampsUTC: {
+        inEarlier: inEarlier.toISOString(),
+        breakStartBeforeMidnight: breakStartBeforeMidnight.toISOString(),
+        endYesterdayUTC: endYesterdayUTC.toISOString(),
+        todayStartUTC: todayStartUTC.toISOString()
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/dev/backfill-now', async (req, res) => {
   const token = req.query.token;
   let user = req.session.user;
@@ -1776,6 +1832,23 @@ app.get('/admin/punches', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// Dev: JSON recent punches (token-gated)
+app.get('/dev/recent-punches', async (req, res) => {
+  const token = req.query.token;
+  if (!token || token !== (process.env.DEV_TEST_TOKEN || '')) return res.status(403).json({ ok: false, error: 'Forbidden' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT p.id, p.employee_id, p.punch_type, p.punched_at
+       FROM punches p
+       ORDER BY p.punched_at DESC
+       LIMIT 100`
+    );
+    res.json({ ok: true, punches: rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 async function performMidnightRollover(now = new Date()) {
   const nyFormatter = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
   const parts = nyFormatter.formatToParts(now);
@@ -1798,28 +1871,41 @@ async function performMidnightRollover(now = new Date()) {
   for (const emp of employees) {
     const windowStart = new Date(endYesterdayUTC.getTime() - 2000);
     const windowEnd = new Date(todayStartUTC.getTime() + 2000);
-    const { rows: existing } = await pool.query(
-      `SELECT 1 FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3 LIMIT 1`,
+    const { rows: windowPunches } = await pool.query(
+      `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3 ORDER BY punched_at ASC`,
       [emp.id, windowStart, windowEnd]
     );
-    if (existing.length > 0) continue;
-    const { rows: recent } = await pool.query(
-      `SELECT punch_type FROM punches WHERE employee_id = $1 ORDER BY punched_at DESC LIMIT 1`,
-      [emp.id]
+    const typesInWindow = new Set(windowPunches.map(p => p.punch_type));
+    const hasOut = typesInWindow.has('out');
+    const hasInNext = typesInWindow.has('in');
+    const hasBreakEnd = typesInWindow.has('break_end');
+    const hasBreakStartNext = windowPunches.some(p => p.punch_type === 'break_start' && new Date(p.punched_at) >= todayStartUTC);
+
+    const { rows: upToBoundary } = await pool.query(
+      `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 AND punched_at <= $2 ORDER BY punched_at ASC`,
+      [emp.id, endYesterdayUTC]
     );
-    if (recent.length === 0) continue;
-    const lastType = recent[0].punch_type;
-    if (lastType === 'in') {
-      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
-      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'in', todayStartUTC]);
-      affected++;
-    } else if (lastType === 'break_start') {
-      const breakEndUTC = new Date(endYesterdayUTC.getTime() - 1000);
-      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_end', breakEndUTC]);
-      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
-      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'in', todayStartUTC]);
-      await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_start', new Date(todayStartUTC.getTime() + 1000)]);
-      affected++;
+    const stateAtBoundary = getStateAt(upToBoundary, endYesterdayUTC);
+
+    if (stateAtBoundary === 'in' || stateAtBoundary === 'break') {
+      if (stateAtBoundary === 'break' && !hasBreakEnd) {
+        const be = new Date(endYesterdayUTC.getTime() - 1000);
+        await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_end', be]);
+        affected++;
+      }
+      if (!hasOut) {
+        await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
+        affected++;
+      }
+      if (!hasInNext) {
+        await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'in', todayStartUTC]);
+        affected++;
+      }
+      if (stateAtBoundary === 'break' && !hasBreakStartNext) {
+        const bs = new Date(todayStartUTC.getTime() + 1000);
+        await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_start', bs]);
+        affected++;
+      }
     }
   }
   return { affected };
@@ -1844,6 +1930,21 @@ function scheduleMidnightRollover() {
 }
 
 app.post('/admin/rollover-now', async (req, res) => {
+  const token = req.query.token;
+  if (!req.session.user) {
+    if (!token || token !== (process.env.DEV_TEST_TOKEN || '')) return res.status(403).send('Forbidden');
+  } else {
+    if (!req.session.user.is_admin) return res.status(403).send('Forbidden');
+  }
+  try {
+    const r = await performMidnightRollover(new Date());
+    res.json({ ok: true, affected: r.affected });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/admin/rollover-now', async (req, res) => {
   const token = req.query.token;
   if (!req.session.user) {
     if (!token || token !== (process.env.DEV_TEST_TOKEN || '')) return res.status(403).send('Forbidden');
