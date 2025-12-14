@@ -144,13 +144,16 @@
         var dp = parts.find(p => p.type === 'dayPeriod')?.value || '';
         if (tMain) tMain.textContent = hh + ':' + mm + ':' + ss;
         if (tAmPm) tAmPm.textContent = dp ? dp.toUpperCase() : '';
-        var dateStr = new Intl.DateTimeFormat('en-US', {
+        var dparts = new Intl.DateTimeFormat('en-US', {
           timeZone: 'America/New_York',
-          month: '2-digit',
+          month: 'short',
           day: '2-digit',
           year: 'numeric'
-        }).format(now);
-        if (dText) dText.textContent = dateStr;
+        }).formatToParts(now);
+        var mon = dparts.find(p => p.type === 'month')?.value || '';
+        var day = dparts.find(p => p.type === 'day')?.value || '';
+        var yr = dparts.find(p => p.type === 'year')?.value || '';
+        if (dText) dText.textContent = mon + ' ' + day + ' ' + yr;
       }
       tick();
       setInterval(tick, 1000);
