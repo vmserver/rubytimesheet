@@ -384,6 +384,10 @@ async function ensureBackfillForUser(userId, days = 7) {
         [userId, windowStart, windowEnd]
       );
       if (exists.length === 0) {
+        if (state === 'break') {
+          const be = new Date(boundary.getTime() - 1000);
+          await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'break_end', be]);
+        }
         await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'out', outTime]);
         await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'in', inTime]);
         if (state === 'break') {
@@ -1875,11 +1879,19 @@ async function performMidnightRollover(now = new Date()) {
       `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3 ORDER BY punched_at ASC`,
       [emp.id, windowStart, windowEnd]
     );
-    const typesInWindow = new Set(windowPunches.map(p => p.punch_type));
-    const hasOut = typesInWindow.has('out');
-    const hasInNext = typesInWindow.has('in');
-    const hasBreakEnd = typesInWindow.has('break_end');
-    const hasBreakStartNext = windowPunches.some(p => p.punch_type === 'break_start' && new Date(p.punched_at) >= todayStartUTC);
+
+    const hasOutBeforeBoundary = windowPunches.some(
+      (p) => p.punch_type === 'out' && new Date(p.punched_at) <= endYesterdayUTC
+    );
+    const hasInAfterBoundary = windowPunches.some(
+      (p) => p.punch_type === 'in' && new Date(p.punched_at) >= todayStartUTC
+    );
+    const hasBreakEndBeforeBoundary = windowPunches.some(
+      (p) => p.punch_type === 'break_end' && new Date(p.punched_at) <= endYesterdayUTC
+    );
+    const hasBreakStartAfterBoundary = windowPunches.some(
+      (p) => p.punch_type === 'break_start' && new Date(p.punched_at) >= todayStartUTC
+    );
 
     const { rows: upToBoundary } = await pool.query(
       `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 AND punched_at <= $2 ORDER BY punched_at ASC`,
@@ -1887,21 +1899,34 @@ async function performMidnightRollover(now = new Date()) {
     );
     const stateAtBoundary = getStateAt(upToBoundary, endYesterdayUTC);
 
+    console.log('Midnight rollover decision', {
+      employeeId: emp.id,
+      stateAtBoundary,
+      hasOutBeforeBoundary,
+      hasInAfterBoundary,
+      hasBreakEndBeforeBoundary,
+      hasBreakStartAfterBoundary,
+      windowStart: windowStart.toISOString(),
+      windowEnd: windowEnd.toISOString(),
+      endYesterdayUTC: endYesterdayUTC.toISOString(),
+      todayStartUTC: todayStartUTC.toISOString()
+    });
+
     if (stateAtBoundary === 'in' || stateAtBoundary === 'break') {
-      if (stateAtBoundary === 'break' && !hasBreakEnd) {
+      if (stateAtBoundary === 'break' && !hasBreakEndBeforeBoundary) {
         const be = new Date(endYesterdayUTC.getTime() - 1000);
         await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_end', be]);
         affected++;
       }
-      if (!hasOut) {
+      if (!hasOutBeforeBoundary) {
         await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
         affected++;
       }
-      if (!hasInNext) {
+      if (!hasInAfterBoundary) {
         await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'in', todayStartUTC]);
         affected++;
       }
-      if (stateAtBoundary === 'break' && !hasBreakStartNext) {
+      if (stateAtBoundary === 'break' && !hasBreakStartAfterBoundary) {
         const bs = new Date(todayStartUTC.getTime() + 1000);
         await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_start', bs]);
         affected++;
@@ -1918,6 +1943,17 @@ function scheduleMidnightRollover() {
   const m = parseInt(nyParts.find(p => p.type === 'month').value);
   const d = parseInt(nyParts.find(p => p.type === 'day').value);
   const midnightNYUTC = parseNYDateToUTC(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  const graceMs = 5 * 60 * 1000;
+  const sinceMidnight = now.getTime() - midnightNYUTC.getTime();
+  if (sinceMidnight >= 0 && sinceMidnight <= graceMs) {
+    (async () => {
+      try {
+        await performMidnightRollover(new Date());
+      } catch (e) {
+        console.error('Midnight rollover immediate run failed', e);
+      }
+    })();
+  }
   const nextMidnightUTC = new Date(midnightNYUTC.getTime() + 24 * 60 * 60 * 1000);
   const delay = nextMidnightUTC.getTime() - now.getTime();
   setTimeout(async () => {

@@ -16,4 +16,6 @@ Thumbs.db
 .vscode/
 .idea/
 nul
+neon_backup.sql
+scripts/export-backup.js
 
