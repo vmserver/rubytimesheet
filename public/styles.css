@@ -174,8 +174,10 @@ input[type='email'] {
   background: #e5e7eb;
   color: #111827;
   transition: box-shadow 180ms ease, transform 120ms ease, filter 150ms ease, border-color 150ms ease;
-  will-change: transform, box-shadow;
+  /* Removed will-change to prevent rasterization blur on scale */
   transform-origin: center;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .btn-primary {
