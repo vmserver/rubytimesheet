@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>User Menu Component Tests</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/userMenu.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Test</div>
+      <div class="topbar-right">
+        <div class="user-menu">
+          <button type="button" class="user-menu-trigger" id="user-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="User menu">●</button>
+          <div class="user-menu-panel" id="user-menu-panel" role="menu" aria-hidden="true" inert>
+            <div class="user-menu-actions">
+              <button type="button" class="btn btn-outline" id="theme-toggle">Dark mode</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+    <script>
+      (function(){
+        function assert(name, cond){ console.log((cond?'PASS ':'FAIL ')+name); }
+        document.addEventListener('DOMContentLoaded', function(){
+          var t = document.getElementById('user-menu-trigger');
+          var p = document.getElementById('user-menu-panel');
+          assert('initial aria-expanded false', t.getAttribute('aria-expanded')==='false');
+          UserMenu.open();
+          assert('open adds class', p.classList.contains('open'));
+          assert('open sets aria-expanded true', t.getAttribute('aria-expanded')==='true');
+          UserMenu.close();
+          assert('close removes class', !p.classList.contains('open'));
+          assert('close sets aria-expanded false', t.getAttribute('aria-expanded')==='false');
+          UserMenu.toggleTheme();
+          assert('theme dark class', document.documentElement.classList.contains('dark'));
+          UserMenu.toggleTheme();
+          assert('theme light class', !document.documentElement.classList.contains('dark'));
+        });
+      })();
+    </script>
+  </body>
+</html>

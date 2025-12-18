@@ -5,6 +5,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><%= title || 'Timesheet' %></title>
     <link rel="stylesheet" href="/styles.css" />
+    <script src="/userMenu.js" defer></script>
+    <script>
+      (function() {
+        var Debug = (function(){
+          var levelMap = { off: 4, error: 3, warning: 2, info: 1 };
+          var level = localStorage.getItem('debug.level') || 'info';
+          function shouldLog(type){ var t = type==='error'?3:type==='warning'?2:1; return levelMap[level] <= t || type==='error'; }
+          function ts(){ return new Date().toISOString(); }
+          function style(type){ if(type==='error') return 'color:#ef4444;font-weight:700'; if(type==='warning') return 'color:#f59e0b;font-weight:700'; return 'color:#2563eb;font-weight:700'; }
+          function info(label,data){ if(!shouldLog('info')) return; try { console.log('%c['+ts()+'] INFO '+label, style('info'), data); } catch(_) {} }
+          function warning(label,data){ if(!shouldLog('warning')) return; try { console.warn('%c['+ts()+'] WARN '+label, style('warning'), data); } catch(_) {} }
+          function error(label,data){ try { console.error('%c['+ts()+'] ERROR '+label, style('error'), data); } catch(_) {} }
+          function group(label,type){ if(!shouldLog(type||'info') && type!=='error') return; try { console.groupCollapsed('['+ts()+'] '+label); } catch(_) {} }
+          function groupEnd(){ try { console.groupEnd(); } catch(_) {} }
+          function setLevel(v){ level = v; localStorage.setItem('debug.level', v); try { console.info('Debug level set to', v); } catch(_) {} }
+          var origFetch = window.fetch ? window.fetch.bind(window) : null;
+          if(origFetch){ window.fetch = async function(input, init){ var started = performance.now(); var url = typeof input==='string'? input : (input && input.url) || ''; var method = (init && init.method) || 'GET'; group('API Request '+method+' '+url,'info'); info('Request',{ url: url, method: method, headers: (init && init.headers) || {}, body: (init && init.body) }); groupEnd(); try { var res = await origFetch(input, init); var clone = res.clone(); var text; try { text = await clone.text(); } catch(__) { text = '(body unreadable)'; } var headers = {}; try { res.headers && res.headers.forEach(function(v,k){ headers[k]=v; }); } catch(_) {} group('API Response '+method+' '+url,'info'); info('Response',{ status: res.status, ok: res.ok, headers: headers, durationMs: Math.round(performance.now()-started), body: text }); groupEnd(); return res; } catch(e) { error('API Failure',{ url: url, method: method, error: e && e.message, stack: e && e.stack }); throw e; } }; }
+          var origXhr = window.XMLHttpRequest; if(origXhr){ var P = origXhr.prototype; var oOpen = P.open; var oSend = P.send; P.open = function(m,u){ this.__m=m; this.__u=u; return oOpen.apply(this, arguments); }; P.send = function(body){ var start = performance.now(); var xhr = this; function done(){ try { group('XHR '+(xhr.__m||'')+' '+(xhr.__u||''),'info'); info('XHR Result',{ status: xhr.status, responseType: xhr.responseType, durationMs: Math.round(performance.now()-start) }); groupEnd(); } catch(_) {} xhr.removeEventListener('loadend', done); } xhr.addEventListener('loadend', done); return oSend.apply(this, arguments); }; }
+          window.addEventListener('error', function(e){ error('Unhandled Error',{ message: e.message, stack: (e.error && e.error.stack) ? e.error.stack : (e.filename+':'+e.lineno+':'+e.colno) }); });
+          window.addEventListener('unhandledrejection', function(e){ var r = e.reason; error('Unhandled Rejection',{ reason: (r && (r.stack||r.message)) || r }); });
+          function perfStart(key){ try { performance.mark(key+'-start'); } catch(_) {} }
+          function perfEnd(key){ try { performance.mark(key+'-end'); var m = performance.measure(key, key+'-start', key+'-end'); info('Perf '+key,{ durationMs: Math.round(m.duration) }); } catch(_) {} }
+          function setState(name,value){ try { window.APP_STATE = window.APP_STATE || {}; window.APP_STATE[name] = value; } catch(_) {} }
+          function getLevel(){ return level; }
+          return { info: info, warning: warning, error: error, group: group, groupEnd: groupEnd, setLevel: setLevel, perfStart: perfStart, perfEnd: perfEnd, setState: setState, getLevel: getLevel };
+        })();
+        window.DEBUG = Debug;
+        try { console.log('Boot', { route: location.pathname, debugLevel: Debug.getLevel() }); } catch(_) {}
+        document.addEventListener('keydown', function(e){
+          var k = e.key || '';
+          if ((k === 'd' || k === 'D') && e.ctrlKey && e.altKey) {
+            var levels = ['info','warning','error','off'];
+            var cur = Debug.getLevel();
+            var idx = levels.indexOf(cur);
+            var next = levels[(idx >= 0 ? idx : 0) + 1 >= levels.length ? 0 : (idx + 1)];
+            Debug.setLevel(next);
+          }
+        });
+      })();
+    </script>
   </head>
   <body>
     <header class="topbar">
@@ -15,18 +55,56 @@
           <a href="/dashboard" class="btn btn-nav">Home</a>
         </div>
         <div class="topbar-right">
-          <span class="user-label"><%= user.name %> <% if (user.is_admin) { %>(Admin)<% } %></span>
-          <form method="post" action="/logout">
-            <button type="submit" class="btn btn-outline">Log out</button>
-          </form>
+          <div class="user-menu">
+            <button type="button" class="user-menu-trigger" id="user-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="User menu">
+              <svg viewBox="0 0 24 24" width="24" height="24">
+                <circle class="circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle>
+                <circle class="head" cx="12" cy="8" r="3" fill="currentColor"></circle>
+                <path class="body" d="M12 13 Q 8 13 7 16 Q 12 18 17 16 Q 16 13 12 13" fill="currentColor"></path>
+              </svg>
+            </button>
+            <div class="user-menu-panel" id="user-menu-panel" role="menu" aria-hidden="true">
+              <div class="user-menu-header">
+                <div class="user-name"><%= user.name %><% if (user.is_admin) { %> (Admin)<% } %></div>
+                <% if (typeof user.email !== 'undefined' && user.email) { %>
+                  <div class="user-email"><%= user.email %></div>
+                <% } %>
+              </div>
+              <div class="user-menu-actions">
+                <div class="user-menu-section">
+                  <div class="section-label">Theme</div>
+                  <div class="theme-options" role="group" aria-label="Theme">
+                    <button type="button" class="menu-item" role="menuitemradio" data-theme-option="dark" aria-checked="false">Dark</button>
+                    <button type="button" class="menu-item" role="menuitemradio" data-theme-option="light" aria-checked="true">Light</button>
+                    <button type="button" class="menu-item" role="menuitemradio" data-theme-option="system" aria-checked="false">System</button>
+                  </div>
+                </div>
+                <div class="menu-divider" aria-hidden="true"></div>
+                <form method="post" action="/logout">
+                  <button type="submit" class="menu-item" role="menuitem">Log out</button>
+                </form>
+              </div>
+            </div>
+          </div>
         </div>
+      <% } else { %>
+        <div class="topbar-right"></div>
       <% } %>
     </header>
 
     <main class="container">
       <%- body %>
     </main>
+    <script>
+      (function() {
+        try {
+          var state = { user: <%- JSON.stringify(user ? { id: user.id, name: user.name, email: user.email, username: user.username, is_admin: user.is_admin } : null) %>, route: location.pathname, theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light' };
+          window.APP_STATE = state;
+          window.DEBUG.group('App State','info');
+          window.DEBUG.info('State', state);
+          window.DEBUG.groupEnd();
+        } catch(_) {}
+      })();
+    </script>
   </body>
 </html>
-
-

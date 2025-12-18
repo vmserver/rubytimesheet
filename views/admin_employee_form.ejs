@@ -41,9 +41,9 @@
         </form>
       </section>
       ${employee ? `
-      <section class=\"card\" style=\"border: 2px solid #fecaca; background: #fff1f2;\">
+      <section class=\"card card-danger\">
         <h2>Delete Employee</h2>
-        <p style=\"font-size: 0.9rem; color: #7f1d1d;\">Choose how you want to remove this employee.</p>
+        <p class=\"text-danger-muted\">Choose how you want to remove this employee.</p>
         <form method=\"post\" action=\"/admin/employees/${employee.id}/delete\" class=\"form\">
           <label class=\"checkbox\">
             <input type=\"checkbox\" name=\"remove_from_list\" /> Remove from list (keep time data)

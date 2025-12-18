@@ -104,6 +104,8 @@ app.use(
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+// Quiet missing favicon in dev
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 // View engine
 app.set('view engine', 'ejs');
@@ -420,7 +422,7 @@ app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, username, password_hash, is_admin FROM employees WHERE username = $1 AND active = TRUE',
+      'SELECT id, name, email, username, password_hash, is_admin FROM employees WHERE username = $1 AND active = TRUE',
       [username]
     );
     if (rows.length === 0) {
@@ -434,6 +436,7 @@ app.post('/login', async (req, res) => {
     req.session.user = {
       id: user.id,
       name: user.name,
+      email: user.email,
       username: user.username,
       is_admin: user.is_admin
     };

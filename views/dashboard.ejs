@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard - Timesheet</title>
     <link rel="stylesheet" href="/styles.css" />
+    <script src="/userMenu.js" defer></script>
   </head>
   <body>
     <header class="topbar">
@@ -15,10 +16,37 @@
           <a href="/dashboard" class="btn btn-nav">Home</a>
         </div>
         <div class="topbar-right">
-          <span class="user-label"><%= user.name %> <% if (user.is_admin) { %>(Admin)<% } %></span>
-          <form method="post" action="/logout">
-            <button type="submit" class="btn btn-outline">Log out</button>
-          </form>
+          <div class="user-menu">
+            <button type="button" class="user-menu-trigger" id="user-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="User menu">
+              <svg viewBox="0 0 24 24" width="24" height="24">
+                <circle class="circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle>
+                <circle class="head" cx="12" cy="8" r="3" fill="currentColor"></circle>
+                <path class="body" d="M12 13 Q 8 13 7 16 Q 12 18 17 16 Q 16 13 12 13" fill="currentColor"></path>
+              </svg>
+            </button>
+            <div class="user-menu-panel" id="user-menu-panel" role="menu" aria-hidden="true">
+              <div class="user-menu-header">
+                <div class="user-name"><%= user.name %><% if (user.is_admin) { %> (Admin)<% } %></div>
+                <% if (typeof user.email !== 'undefined' && user.email) { %>
+                  <div class="user-email"><%= user.email %></div>
+                <% } %>
+              </div>
+              <div class="user-menu-actions">
+                <div class="user-menu-section">
+                  <div class="section-label">Theme</div>
+                  <div class="theme-options" role="group" aria-label="Theme">
+                    <button type="button" class="menu-item" role="menuitemradio" data-theme-option="dark" aria-checked="false">Dark</button>
+                    <button type="button" class="menu-item" role="menuitemradio" data-theme-option="light" aria-checked="true">Light</button>
+                    <button type="button" class="menu-item" role="menuitemradio" data-theme-option="system" aria-checked="false">System</button>
+                  </div>
+                </div>
+                <div class="menu-divider" aria-hidden="true"></div>
+                <form method="post" action="/logout">
+                  <button type="submit" class="menu-item" role="menuitem">Log out</button>
+                </form>
+              </div>
+            </div>
+          </div>
         </div>
       <% } %>
     </header>
@@ -159,4 +187,5 @@
       setInterval(tick, 1000);
     })();
   </script>
+  
 </html>
