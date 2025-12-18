@@ -147,7 +147,7 @@ function requireAdmin(req, res, next) {
 
 // Date formatting helper for views
 function toLocalString(date) {
-  return new Date(date).toLocaleString('en-US', { timeZone: TIMEZONE });
+  return new Date(date).toLocaleString('en-US', { timeZone: TIMEZONE, second: '2-digit' });
 }
 
 app.locals.toLocalString = toLocalString;
