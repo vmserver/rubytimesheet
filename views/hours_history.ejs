@@ -6,54 +6,6 @@
     <title>Hours History - Timesheet</title>
     <link rel="stylesheet" href="/styles.css" />
     <script src="/userMenu.js" defer></script>
-    <style>
-      .date-range-form {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-        flex-wrap: wrap;
-        margin-bottom: 1rem;
-        padding: 1rem;
-        background: #f9fafb;
-        border-radius: 0.5rem;
-      }
-      .date-range-form label {
-        font-weight: 500;
-        font-size: 0.9rem;
-      }
-      .date-range-form input[type="date"] {
-        padding: 0.5rem;
-        border-radius: 0.5rem;
-        border: 1px solid #d1d5db;
-        font-size: 0.9rem;
-      }
-      .quick-filters {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        margin-top: 0.5rem;
-      }
-      .quick-filters .btn {
-        font-size: 0.85rem;
-        padding: 0.4rem 0.8rem;
-      }
-      @media (max-width: 640px) {
-        .date-range-form {
-          display: grid;
-          grid-template-columns: 1fr;
-          align-items: start;
-        }
-        .date-range-form label,
-        .date-range-form input[type="date"],
-        .date-range-form .btn {
-          width: 100%;
-        }
-        .quick-filters {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-        }
-      }
-    </style>
   </head>
   <body>
     <header class="topbar">
@@ -176,19 +128,19 @@
         %>
         <table class="table summary-table">
           <tbody>
-            <tr style="background: #f9fafb; font-weight: bold;">
+            <tr class="summary-row">
               <td>Total</td>
               <td><%= totalWorkedDisplay %> hours</td>
             </tr>
-            <tr style="background: #f9fafb; font-weight: bold;">
+            <tr class="summary-row">
               <td>Weekday Overtime</td>
               <td><%= weekdayDisplay %> hours</td>
             </tr>
-            <tr style="background: #f9fafb; font-weight: bold;">
+            <tr class="summary-row">
               <td>Weekend Hours</td>
               <td><%= weekendDisplay %> hours</td>
             </tr>
-            <tr style="background: #eef2ff; font-weight: bold;">
+            <tr class="summary-row-highlight">
               <td>Total Extra Hours</td>
               <td><%= totalExtraDisplay %> hours</td>
             </tr>

@@ -387,7 +387,8 @@ async function ensureBackfillForUser(userId, days = 7) {
       );
       if (exists.length === 0) {
         if (state === 'break') {
-          const be = new Date(boundary.getTime() - 1000);
+          // ensure break_end is before out
+          const be = new Date(boundary.getTime() - 2000);
           await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'break_end', be]);
         }
         await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'out', outTime]);
@@ -1918,15 +1919,23 @@ async function performMidnightRollover(now = new Date()) {
     if (stateAtBoundary === 'in' || stateAtBoundary === 'break') {
       if (stateAtBoundary === 'break' && !hasBreakEndBeforeBoundary) {
         // Ensure break_end is strictly 1 second before the out punch (which is at endYesterdayUTC)
-        // Using UTC methods on the correctly calculated NY timestamp
-        const be = new Date(endYesterdayUTC);
-        be.setSeconds(be.getSeconds() - 1);
+        // Using timestamp arithmetic to guarantee sequence
+        const be = new Date(endYesterdayUTC.getTime() - 1000);
         
         console.log(`DEBUG: Inserting break_end for employee ${emp.id} at ${be.toISOString()} (calculated from ${endYesterdayUTC.toISOString()})`);
         await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_end', be]);
         affected++;
       }
       if (!hasOutBeforeBoundary) {
+        // Validate sequence if we just inserted a break_end
+        if (stateAtBoundary === 'break' && !hasBreakEndBeforeBoundary) {
+           const beCheck = new Date(endYesterdayUTC.getTime() - 1000);
+           if (beCheck.getTime() >= endYesterdayUTC.getTime()) {
+               console.error('CRITICAL: break_end timestamp >= out timestamp during rollover!');
+               // Force correction if somehow math failed (unlikely with getTime)
+               endYesterdayUTC.setTime(beCheck.getTime() + 1000);
+           }
+        }
         console.log(`DEBUG: Inserting out for employee ${emp.id} at ${endYesterdayUTC.toISOString()}`);
         await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
         affected++;
