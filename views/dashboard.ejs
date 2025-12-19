@@ -127,7 +127,7 @@
           <h2>Recent activity</h2>
           <a href="/hours" class="btn btn-outline">View Previous Days</a>
         </div>
-        <div class="table-wrap">
+        <div class="table-scroll">
           <table class="table">
             <thead>
               <tr>
@@ -135,23 +135,19 @@
                 <th>Type</th>
               </tr>
             </thead>
+            <tbody>
+              <% if (punches.length === 0) { %>
+                <tr><td colspan="2">No punches yet.</td></tr>
+              <% } else { %>
+                <% punches.forEach(function(p) { %>
+                  <tr>
+                    <td><%= toLocalString(p.punched_at) %></td>
+                    <td><%= p.punch_type %></td>
+                  </tr>
+                <% }); %>
+              <% } %>
+            </tbody>
           </table>
-          <div class="table-body-scroll">
-            <table class="table">
-              <tbody>
-                <% if (punches.length === 0) { %>
-                  <tr><td colspan="2">No punches yet.</td></tr>
-                <% } else { %>
-                  <% punches.forEach(function(p) { %>
-                    <tr>
-                      <td><%= toLocalString(p.punched_at) %></td>
-                      <td><%= p.punch_type %></td>
-                    </tr>
-                  <% }); %>
-                <% } %>
-              </tbody>
-            </table>
-          </div>
         </div>
       </section>
 

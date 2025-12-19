@@ -607,16 +607,12 @@ input[type='date'] {
 .hours-callout .label { font-weight: 600; color: var(--hours-callout-label); }
 .hours-callout .value { font-size: 1.2rem; font-weight: 700; color: var(--hours-callout-text); }
 
-.recent-activity .table-scroll,
-.recent-punches .table-scroll,
 .hours-history .table-scroll,
 .table-responsive {
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   overflow-y: auto;
 }
-.recent-activity .table-scroll { max-height: 300px; }
-.recent-punches .table-scroll { max-height: 480px; }
 .hours-history .table-scroll { max-height: 360px; }
 .table-responsive { overflow-x: auto; }
 
@@ -629,6 +625,42 @@ input[type='date'] {
   z-index: 1;
 }
 
+/* Body-only vertical scroll (keeps header clean) */
+.recent-activity .table-scroll,
+.recent-punches .table-scroll {
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  overflow-y: hidden;
+  overflow-x: auto;
+}
+.recent-activity .table,
+.recent-punches .table { width: 100%; table-layout: fixed; }
+.recent-activity .table thead,
+.recent-activity .table tbody,
+.recent-punches .table thead,
+.recent-punches .table tbody { display: block; }
+.recent-activity .table thead tr,
+.recent-activity .table tbody tr,
+.recent-punches .table thead tr,
+.recent-punches .table tbody tr { display: table; width: 100%; table-layout: fixed; }
+.recent-activity .table tbody { max-height: 300px; overflow-y: auto; }
+.recent-punches .table tbody { max-height: 480px; overflow-y: auto; }
+
+/* Column widths to keep header/body aligned */
+.recent-activity .table th:nth-child(1),
+.recent-activity .table td:nth-child(1) { width: 60%; }
+.recent-activity .table th:nth-child(2),
+.recent-activity .table td:nth-child(2) { width: 40%; }
+
+.recent-punches .table th:nth-child(1),
+.recent-punches .table td:nth-child(1) { width: 30%; }
+.recent-punches .table th:nth-child(2),
+.recent-punches .table td:nth-child(2) { width: 30%; }
+.recent-punches .table th:nth-child(3),
+.recent-punches .table td:nth-child(3) { width: 20%; }
+.recent-punches .table th:nth-child(4),
+.recent-punches .table td:nth-child(4) { width: 20%; }
+
 /* New: fixed header + scrollable body structure */
 .table-wrap {
   border: 1px solid var(--border-color);
@@ -637,7 +669,10 @@ input[type='date'] {
 }
 .table-wrap > .table { width: 100%; border-collapse: collapse; }
 .table-wrap > .table thead th { background: var(--bg-table-header); }
-.table-wrap .table-body-scroll { overflow-y: auto; scrollbar-gutter: stable; }
+.table-wrap .table-head-scroll { overflow-x: auto; overflow-y: hidden; scrollbar-gutter: stable both-edges; }
+.table-wrap .table-body-scroll { overflow-y: auto; overflow-x: auto; scrollbar-gutter: stable both-edges; }
+.table-wrap .table-head-scroll::-webkit-scrollbar { height: 8px; }
+.table-wrap .table-body-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
 .recent-activity .table-wrap .table-body-scroll { max-height: 300px; }
 .recent-punches .table-wrap .table-body-scroll { max-height: 480px; }
 .recent-activity .table-wrap .table thead th,

@@ -117,5 +117,19 @@
         } catch(_) {}
       })();
     </script>
+    <script>
+      (function(){
+        try {
+          document.querySelectorAll('.table-wrap').forEach(function(wrap){
+            var head = wrap.querySelector('.table-head-scroll');
+            var body = wrap.querySelector('.table-body-scroll');
+            if (!head || !body) return;
+            var s = false;
+            body.addEventListener('scroll', function(){ if (s) return; s = true; head.scrollLeft = body.scrollLeft; s = false; });
+            head.addEventListener('scroll', function(){ if (s) return; s = true; body.scrollLeft = head.scrollLeft; s = false; });
+          });
+        } catch(_) {}
+      })();
+    </script>
   </body>
 </html>
