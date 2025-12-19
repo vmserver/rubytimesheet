@@ -5,34 +5,38 @@
     body: `
       <section class="card recent-punches">
         <h1>Recent Punches</h1>
-        <div class="table-scroll">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>Employee</th>
-              <th>Username</th>
-              <th>Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${
-              punches.length === 0
-                ? '<tr><td colspan="4">No punches yet.</td></tr>'
-                : punches
-                    .map(
-                      (p) => `
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
               <tr>
-                <td>${toLocalString(p.punched_at)}</td>
-                <td>${p.name}</td>
-                <td>${p.username}</td>
-                <td>${p.punch_type}</td>
-              </tr>`
-                    )
-                    .join('')
-            }
-          </tbody>
-        </table>
+                <th>When</th>
+                <th>Employee</th>
+                <th>Username</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+          </table>
+          <div class="table-body-scroll">
+            <table class="table">
+              <tbody>
+                ${
+                  punches.length === 0
+                    ? '<tr><td colspan="4">No punches yet.</td></tr>'
+                    : punches
+                        .map(
+                          (p) => `
+                <tr>
+                  <td>${toLocalString(p.punched_at)}</td>
+                  <td>${p.name}</td>
+                  <td>${p.username}</td>
+                  <td>${p.punch_type}</td>
+                </tr>`
+                        )
+                        .join('')
+                }
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
     `

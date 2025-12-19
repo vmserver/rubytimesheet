@@ -20,7 +20,7 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="brand"><%= brand %></div>
+      <a href="/dashboard" class="brand" aria-label="Dashboard"><%= brand %></a>
       <% if (user) { %>
         <div class="topbar-nav">
           <button onclick="window.history.back()" class="btn btn-nav">← Back</button>
