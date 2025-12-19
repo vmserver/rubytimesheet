@@ -1917,11 +1917,17 @@ async function performMidnightRollover(now = new Date()) {
 
     if (stateAtBoundary === 'in' || stateAtBoundary === 'break') {
       if (stateAtBoundary === 'break' && !hasBreakEndBeforeBoundary) {
-        const be = new Date(endYesterdayUTC.getTime() - 1000);
+        // Ensure break_end is strictly 1 second before the out punch (which is at endYesterdayUTC)
+        // Using UTC methods on the correctly calculated NY timestamp
+        const be = new Date(endYesterdayUTC);
+        be.setSeconds(be.getSeconds() - 1);
+        
+        console.log(`DEBUG: Inserting break_end for employee ${emp.id} at ${be.toISOString()} (calculated from ${endYesterdayUTC.toISOString()})`);
         await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_end', be]);
         affected++;
       }
       if (!hasOutBeforeBoundary) {
+        console.log(`DEBUG: Inserting out for employee ${emp.id} at ${endYesterdayUTC.toISOString()}`);
         await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
         affected++;
       }
@@ -1999,27 +2005,32 @@ app.get('/admin/rollover-now', async (req, res) => {
 });
 
 // Start server
-initDb()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Timesheet app listening on port ${PORT}`);
-      scheduleMidnightRollover();
+if (require.main === module) {
+  initDb()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`Attempting to listen on port ${PORT}`);
+        console.log(`Timesheet app listening on port ${PORT}`);
+        scheduleMidnightRollover();
+      });
+    })
+    .catch((err) => {
+      console.error('Failed to initialize database', err);
+      console.error('\n=== DATABASE CONNECTION ERROR ===');
+      console.error('You need to set up a PostgreSQL database.');
+      console.error('\nOption 1: Use Render PostgreSQL (Recommended for deployment)');
+      console.error('  1. Go to https://render.com and create a PostgreSQL database');
+      console.error('  2. Copy the DATABASE_URL from Render');
+      console.error('  3. Create a .env file with: DATABASE_URL=<your-render-url>');
+      console.error('\nOption 2: Use a free cloud database for testing');
+      console.error('  - Neon (neon.tech) - Free PostgreSQL');
+      console.error('  - Supabase (supabase.com) - Free PostgreSQL');
+      console.error('  - ElephantSQL (elephantsql.com) - Free PostgreSQL');
+      console.error('\nThen create a .env file with your DATABASE_URL');
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error('Failed to initialize database', err);
-    console.error('\n=== DATABASE CONNECTION ERROR ===');
-    console.error('You need to set up a PostgreSQL database.');
-    console.error('\nOption 1: Use Render PostgreSQL (Recommended for deployment)');
-    console.error('  1. Go to https://render.com and create a PostgreSQL database');
-    console.error('  2. Copy the DATABASE_URL from Render');
-    console.error('  3. Create a .env file with: DATABASE_URL=<your-render-url>');
-    console.error('\nOption 2: Use a free cloud database for testing');
-    console.error('  - Neon (neon.tech) - Free PostgreSQL');
-    console.error('  - Supabase (supabase.com) - Free PostgreSQL');
-    console.error('  - ElephantSQL (elephantsql.com) - Free PostgreSQL');
-    console.error('\nThen create a .env file with your DATABASE_URL');
-    process.exit(1);
-  });
+}
+
+module.exports = { app, pool, performMidnightRollover };
 
 
