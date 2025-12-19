@@ -8,11 +8,11 @@
       var resolved = saved === 'system' ? (prefersDark ? 'dark' : 'light') : saved;
       var root = document.documentElement;
       var body = document.body;
-      ['dark','classic-dark'].forEach(function(cls){
+      ['dark'].forEach(function(cls){
         try { root.classList.remove(cls); body && body.classList.remove(cls); } catch(_) {}
       });
+      if (resolved !== 'dark' && resolved !== 'light') { resolved = 'light'; }
       if (resolved === 'dark') { try { root.classList.add('dark'); body && body.classList.add('dark'); } catch(_) {} }
-      if (resolved === 'classic-dark') { try { root.classList.add('classic-dark'); body && body.classList.add('classic-dark'); } catch(_) {} }
       var radios = document.querySelectorAll('[data-theme-option]');
       radios.forEach(function(it){
         var opt = it.getAttribute('data-theme-option');

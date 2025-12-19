@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><%= title || 'Timesheet' %></title>
+     <script>
+       (function() {
+         try {
+           var saved = localStorage.getItem('theme') || 'light';
+           var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+           var resolved = saved === 'system' ? (prefersDark ? 'dark' : 'light') : saved;
+           if (resolved !== 'dark' && resolved !== 'light') { resolved = 'light'; }
+           if (resolved === 'dark') { document.documentElement.classList.add('dark'); }
+         } catch (e) {}
+       })();
+     </script>
     <link rel="stylesheet" href="/styles.css" />
     <script src="/userMenu.js" defer></script>
     <script>
