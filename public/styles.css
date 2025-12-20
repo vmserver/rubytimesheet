@@ -702,7 +702,8 @@ input[type='date'] {
   
   .date-range-form { display: grid; grid-template-columns: 1fr; align-items: start; }
   .date-range-form label, .date-range-form input[type="date"], .date-range-form .btn { width: 100%; }
-  .quick-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .quick-filters { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; width: 100%; }
+  .quick-filters .btn { width: 100%; }
 }
 @media (max-width: 400px) {
   .dashboard .admin-tools .button-row { grid-template-columns: 1fr; }
@@ -728,13 +729,14 @@ input[type='date'] {
 .hours-history .table th:nth-child(1),
 .hours-history .table td:nth-child(1),
 .hours-history .summary-table td:nth-child(1) {
-  width: 40%;
+  width: 50%;
 }
 
 .hours-history .table th:nth-child(2),
 .hours-history .table td:nth-child(2),
 .hours-history .summary-table td:nth-child(2) {
-  width: 60%;
+  width: 50%;
+  text-align: center;
 }
 
 .hours-history .summary-table { width: 100%; table-layout: fixed; border-top: 1px solid var(--border-color); }
