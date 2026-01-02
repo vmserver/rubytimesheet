@@ -1577,8 +1577,24 @@ app.get('/hours', requireAuth, async (req, res) => {
     console.log('Daily hours grouped:', Object.keys(dailyHours).length, 'days');
     console.log('Date keys:', Object.keys(dailyHours));
     
-    // Calculate hours for each day
-    const hoursByDate = Object.entries(dailyHours).map(([date, dayPunches]) => {
+    // Generate complete list of dates in range
+    const [startY, startM, startD] = startDateFormatted.split('-').map(Number);
+    const [endY, endM, endD] = endDateFormatted.split('-').map(Number);
+    
+    // Create Date objects at noon to avoid DST issues when iterating
+    const iterDate = new Date(startY, startM - 1, startD, 12);
+    const targetDate = new Date(endY, endM - 1, endD, 12);
+    
+    const hoursByDate = [];
+    
+    while (iterDate <= targetDate) {
+      const mm = String(iterDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(iterDate.getDate()).padStart(2, '0');
+      const yyyy = iterDate.getFullYear();
+      const dateKey = `${mm}/${dd}/${yyyy}`;
+      
+      const dayPunches = dailyHours[dateKey] || [];
+      
       // Check if this is today and user is still punched in
       const today = now.toLocaleDateString('en-US', { 
         timeZone: TIMEZONE,
@@ -1586,22 +1602,41 @@ app.get('/hours', requireAuth, async (req, res) => {
         month: '2-digit',
         day: '2-digit'
       });
-      const isToday = date === today;
+      const isToday = dateKey === today;
       
       // Check if still punched in today
-      const lastPunch = dayPunches[dayPunches.length - 1];
-      const stillPunchedIn = isToday && 
-        (lastPunch.punch_type === 'in' || lastPunch.punch_type === 'break_end' || lastPunch.punch_type === 'break_start');
+      let stillPunchedIn = false;
+      if (dayPunches.length > 0) {
+        const lastPunch = dayPunches[dayPunches.length - 1];
+        stillPunchedIn = isToday && 
+          (lastPunch.punch_type === 'in' || lastPunch.punch_type === 'break_end' || lastPunch.punch_type === 'break_start');
+      }
       
-      const effectiveEnd = stillPunchedIn ? now : (!isToday ? getNYEndOfDayUTCFromMMDDYYYY(date) : null);
+      const effectiveEnd = stillPunchedIn ? now : (!isToday ? getNYEndOfDayUTCFromMMDDYYYY(dateKey) : null);
       const hours = calculateHours(dayPunches, effectiveEnd);
       const minutes = hours * 60;
-      console.log(`✅ Calculated hours for ${date}: ${hours.toFixed(4)} hours (${dayPunches.length} punches)`);
-      console.log(`   Punch types: ${dayPunches.map(p => p.punch_type).join(', ')}`);
-      console.log(`   Still punched in: ${stillPunchedIn}`);
-      return { date, hours, minutes, hoursDisplay: hours.toFixed(2), minutesDisplay: minutes.toFixed(2), punches: dayPunches };
-    }).sort((a, b) => {
-      // Sort by date, most recent first - parse MM/DD/YYYY format
+      
+      if (dayPunches.length > 0) {
+        console.log(`✅ Calculated hours for ${dateKey}: ${hours.toFixed(4)} hours (${dayPunches.length} punches)`);
+        console.log(`   Punch types: ${dayPunches.map(p => p.punch_type).join(', ')}`);
+        console.log(`   Still punched in: ${stillPunchedIn}`);
+      }
+      
+      hoursByDate.push({ 
+        date: dateKey, 
+        hours, 
+        minutes, 
+        hoursDisplay: hours.toFixed(2), 
+        minutesDisplay: minutes.toFixed(2), 
+        punches: dayPunches 
+      });
+      
+      // Move to next day
+      iterDate.setDate(iterDate.getDate() + 1);
+    }
+    
+    // Sort by date, most recent first
+    hoursByDate.sort((a, b) => {
       const parseDate = (dateStr) => {
         const [month, day, year] = dateStr.split('/').map(Number);
         return new Date(year, month - 1, day);
