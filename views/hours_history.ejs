@@ -107,7 +107,15 @@
                   <% hoursByDate.forEach(function(day) { %>
                     <tr>
                       <td><%= day.date %></td>
-                      <td><strong><%= day.hoursDisplay %> hours</strong></td>
+                      <td>
+                        <% if (user && user.is_admin) { %>
+                          <strong class="editable-hours" onclick="openManualEntry('<%= day.date %>')" title="Click to edit punches">
+                            <%= day.hoursDisplay %> hours
+                          </strong>
+                        <% } else { %>
+                          <strong><%= day.hoursDisplay %> hours</strong>
+                        <% } %>
+                      </td>
                     </tr>
                   <% }); %>
                 <% } %>
@@ -224,6 +232,300 @@
       });
     </script>
     
+    
+    <!-- Manual Entry Modal -->
+    <div id="manualEntryModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalDateTitle">Edit Punches</h2>
+          <button type="button" class="close-btn" onclick="closeManualEntry()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="loadingPunches" style="display: none;">Loading...</div>
+          <div id="punchesContainer"></div>
+          <button type="button" class="btn btn-outline btn-small" onclick="addPunchRow()" style="margin-top: 10px;">+ Add Punch</button>
+          <div id="modalError" class="alert" style="display: none; margin-top: 10px;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeManualEntry()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="savePunches()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
+        background: var(--bg-card);
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .modal-header h2 { margin: 0; font-size: 1.25rem; }
+      .close-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--text-muted);
+      }
+      .modal-body {
+        overflow-y: auto;
+        flex-grow: 1;
+        padding-bottom: 1rem;
+      }
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border-color);
+      }
+      .punch-row {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+        align-items: center;
+      }
+      .punch-row select, .punch-row input {
+        padding: 0.4rem;
+        border-radius: 0.25rem;
+        border: 1px solid var(--border-input);
+        background: var(--bg-input);
+        color: var(--text-main);
+      }
+      .editable-hours {
+        cursor: pointer;
+        border-bottom: 1px dashed var(--text-muted);
+      }
+      .editable-hours:hover {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+      }
+    </style>
+
+    <script>
+      let currentPunches = [];
+      let currentEditDate = null;
+
+      async function openManualEntry(date) {
+        currentEditDate = date;
+        document.getElementById('modalDateTitle').textContent = `Edit Punches - ${date}`;
+        document.getElementById('manualEntryModal').style.display = 'flex';
+        document.getElementById('loadingPunches').style.display = 'block';
+        document.getElementById('punchesContainer').innerHTML = '';
+        document.getElementById('modalError').style.display = 'none';
+
+        try {
+          const response = await fetch(`/api/punches?date=${encodeURIComponent(date)}`);
+          
+          if (!response.ok) {
+            throw new Error(`Server returned ${response.status}`);
+          }
+
+          const data = await response.json();
+          
+          if (data.ok) {
+            currentPunches = data.punches.map(p => {
+              const d = new Date(p.punched_at);
+              // Format to HH:MM (24h) in NY time
+              const timeStr = d.toLocaleTimeString('en-US', {
+                timeZone: 'America/New_York',
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+              
+              return {
+                ...p,
+                time: timeStr
+              };
+            });
+            
+            renderPunches();
+          } else {
+            showError(data.error || 'Failed to load punches');
+          }
+        } catch (e) {
+          showError('Network error');
+          console.error(e);
+        } finally {
+          document.getElementById('loadingPunches').style.display = 'none';
+        }
+      }
+
+      function closeManualEntry() {
+        document.getElementById('manualEntryModal').style.display = 'none';
+        currentPunches = [];
+        currentEditDate = null;
+      }
+
+      function renderPunches() {
+        const container = document.getElementById('punchesContainer');
+        container.innerHTML = '';
+        
+        if (currentPunches.length === 0) {
+          container.innerHTML = '<p class="text-muted">No punches for this day.</p>';
+        }
+
+        currentPunches.forEach((punch, index) => {
+          const row = document.createElement('div');
+          row.className = 'punch-row';
+          row.innerHTML = `
+            <select onchange="updatePunch(${index}, 'punch_type', this.value)">
+              <option value="in" ${punch.punch_type === 'in' ? 'selected' : ''}>In</option>
+              <option value="out" ${punch.punch_type === 'out' ? 'selected' : ''}>Out</option>
+              <option value="break_start" ${punch.punch_type === 'break_start' ? 'selected' : ''}>Break Start</option>
+              <option value="break_end" ${punch.punch_type === 'break_end' ? 'selected' : ''}>Break End</option>
+            </select>
+            <input type="time" value="${punch.time}" onchange="updatePunch(${index}, 'time', this.value)" required>
+            <button type="button" class="btn btn-danger btn-small" onclick="deletePunch(${index})">&times;</button>
+          `;
+          container.appendChild(row);
+        });
+
+        // Container for warnings
+        const warningContainer = document.createElement('div');
+        warningContainer.id = 'warningContainer';
+        container.appendChild(warningContainer);
+        
+        updateValidationUI();
+      }
+
+      function validateSequence() {
+        const warnings = [];
+        let state = 'out'; // out, in, break
+        
+        // Sort temp copy for validation (so we validate based on time order)
+        // Note: This relies on valid times. If time is incomplete, we skip.
+        const sorted = [...currentPunches]
+          .filter(p => p.time)
+          .sort((a, b) => a.time.localeCompare(b.time));
+        
+        sorted.forEach((p, i) => {
+          // We can't easily map back to "Row X" because of sorting, 
+          // so we'll just describe the issue based on time.
+          const t = p.time;
+          if (p.punch_type === 'in') {
+            if (state !== 'out') warnings.push(`${t}: Clock In while already logged in/on break.`);
+            state = 'in';
+          } else if (p.punch_type === 'out') {
+            if (state !== 'in') warnings.push(`${t}: Clock Out without being logged in.`);
+            state = 'out';
+          } else if (p.punch_type === 'break_start') {
+            if (state !== 'in') warnings.push(`${t}: Start Break without being logged in.`);
+            state = 'break';
+          } else if (p.punch_type === 'break_end') {
+            if (state !== 'break') warnings.push(`${t}: End Break without starting one.`);
+            state = 'in';
+          }
+        });
+        
+        if (state !== 'out' && sorted.length > 0) warnings.push('Warning: Day ends while still logged in or on break.');
+        
+        return warnings;
+      }
+
+      function addPunchRow() {
+        currentPunches.push({
+          punch_type: 'in',
+          time: '09:00'
+        });
+        renderPunches();
+      }
+
+      function updatePunch(index, field, value) {
+        currentPunches[index][field] = value;
+        updateValidationUI();
+      }
+
+      function updateValidationUI() {
+         const warnings = validateSequence();
+         const container = document.getElementById('warningContainer');
+         // If renderPunches hasn't run yet or container missing (shouldn't happen if modal open)
+         if (!container) return;
+         
+         if (warnings.length > 0) {
+             container.innerHTML = '<div class="alert" style="margin-top: 10px; font-size: 0.85rem;"><strong>Sequence Warnings:</strong><br>' + warnings.join('<br>') + '</div>';
+         } else {
+             container.innerHTML = '';
+         }
+      }
+
+      function deletePunch(index) {
+        currentPunches.splice(index, 1);
+        renderPunches();
+      }
+
+      function showError(msg) {
+        const el = document.getElementById('modalError');
+        el.textContent = msg;
+        el.style.display = 'block';
+      }
+
+      async function savePunches() {
+        // Basic validation:
+        for (const p of currentPunches) {
+          if (!p.time) {
+            showError('All punches must have a time.');
+            return;
+          }
+        }
+        
+        // Sort punches by time
+        currentPunches.sort((a, b) => a.time.localeCompare(b.time));
+
+        try {
+          const response = await fetch('/api/save_manual_punches', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              date: currentEditDate,
+              punches: currentPunches
+            })
+          });
+          
+          if (!response.ok) {
+             throw new Error(`Server returned ${response.status}`);
+          }
+          
+          const data = await response.json();
+          if (data.ok) {
+            closeManualEntry();
+            window.location.reload();
+          } else {
+            showError(data.error || 'Failed to save punches');
+          }
+        } catch (e) {
+          showError('Network error');
+        }
+      }
+    </script>
   </body>
   <script>
     (function(){

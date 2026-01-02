@@ -103,6 +103,7 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 // Quiet missing favicon in dev
 app.get('/favicon.ico', (req, res) => res.status(204).end());
@@ -2045,6 +2046,99 @@ app.get('/admin/rollover-now', async (req, res) => {
     res.json({ ok: true, affected: r.affected });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// API to get punches for a specific date (for manual entry)
+app.get('/api/punches', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { date, userId } = req.query; // date in YYYY-MM-DD or MM/DD/YYYY
+    if (!date) return res.status(400).json({ error: 'Date is required' });
+    
+    const targetUserId = userId || req.session.user.id;
+
+    // Normalize date to YYYY-MM-DD for consistency
+    let dateStr = date;
+    if (date.includes('/')) {
+        const [m, d, y] = date.split('/');
+        dateStr = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    
+    // Calculate start and end of day in UTC
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const startUTC = nyLocalToUTC(year, month, day, 0, 0, 0);
+    const endUTC = nyLocalToUTC(year, month, day, 23, 59, 59, 999);
+    
+    const { rows } = await pool.query(
+      `SELECT id, punch_type, punched_at 
+       FROM punches 
+       WHERE employee_id = $1 
+       AND punched_at >= $2 
+       AND punched_at <= $3 
+       ORDER BY punched_at ASC`,
+      [targetUserId, startUTC, endUTC]
+    );
+    
+    res.json({ ok: true, punches: rows, date: dateStr });
+  } catch (err) {
+    console.error('Error fetching punches:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// API to save manual punches
+app.post('/api/save_manual_punches', requireAuth, requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { date, punches, userId } = req.body;
+    if (!date) return res.status(400).json({ error: 'Date is required' });
+    
+    const targetUserId = userId || req.session.user.id;
+    
+    // Normalize date
+    let dateStr = date;
+    if (date.includes('/')) {
+        const [m, d, y] = date.split('/');
+        dateStr = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const startUTC = nyLocalToUTC(year, month, day, 0, 0, 0);
+    const endUTC = nyLocalToUTC(year, month, day, 23, 59, 59, 999);
+
+    await client.query('BEGIN');
+    
+    // 1. Delete existing punches for this day
+    await client.query(
+      `DELETE FROM punches 
+       WHERE employee_id = $1 
+       AND punched_at >= $2 
+       AND punched_at <= $3`,
+      [targetUserId, startUTC, endUTC]
+    );
+    
+    // 2. Insert new punches
+    if (punches && punches.length > 0) {
+      for (const p of punches) {
+        // p.time is expected to be "HH:MM" (24h)
+        const [h, m] = p.time.split(':').map(Number);
+        const punchDate = nyLocalToUTC(year, month, day, h, m, 0);
+        
+        await client.query(
+          `INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`,
+          [targetUserId, p.punch_type, punchDate]
+        );
+      }
+    }
+    
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error saving manual punches:', err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
   }
 });
 
