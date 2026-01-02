@@ -1,5 +1,6 @@
 /* Root Variables - Theme Definition */
 :root {
+  color-scheme: light;
   /* Light Theme Defaults */
   --bg-body: #f3f4f6;
   --bg-card: #ffffff;
@@ -90,6 +91,7 @@
 }
 
 [data-theme='dark'], .dark {
+  color-scheme: dark;
   /* Dark Theme Overrides - Modern Grey/Black */
   /* Primary background: Dark grey (#1A1A1A to #2D2D2D range) */
   --bg-body: #1A1A1A;

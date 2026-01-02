@@ -308,16 +308,47 @@
       }
       .punch-row {
         display: flex;
-        gap: 0.5rem;
-        margin-bottom: 0.5rem;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
         align-items: center;
       }
       .punch-row select, .punch-row input {
-        padding: 0.4rem;
-        border-radius: 0.25rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
         border: 1px solid var(--border-input);
         background: var(--bg-input);
         color: var(--text-main);
+        font-family: inherit;
+        font-size: 1rem;
+        height: 40px;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        color-scheme: normal; /* Follows the system/parent theme defined in styles.css */
+      }
+      .punch-row select:focus, .punch-row input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--border-focus);
+      }
+      .punch-row select {
+        flex: 1.5;
+        cursor: pointer;
+      }
+      .punch-row input[type="time"] {
+        flex: 1;
+        cursor: text;
+      }
+      .punch-row .btn-danger {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        line-height: 1;
+        flex-shrink: 0;
+        font-size: 1.25rem;
+        margin-left: 0.25rem;
       }
       .editable-hours {
         cursor: pointer;
@@ -332,11 +363,15 @@
     <script>
       let currentPunches = [];
       let currentEditDate = null;
+      let overlayClickHandler = null;
 
       async function openManualEntry(date) {
         currentEditDate = date;
         document.getElementById('modalDateTitle').textContent = `Edit Punches - ${date}`;
-        document.getElementById('manualEntryModal').style.display = 'flex';
+        const overlay = document.getElementById('manualEntryModal');
+        overlay.style.display = 'flex';
+        overlayClickHandler = function(e){ if (e.target === overlay) closeManualEntry(); };
+        overlay.addEventListener('click', overlayClickHandler);
         document.getElementById('loadingPunches').style.display = 'block';
         document.getElementById('punchesContainer').innerHTML = '';
         document.getElementById('modalError').style.display = 'none';
@@ -380,7 +415,9 @@
       }
 
       function closeManualEntry() {
-        document.getElementById('manualEntryModal').style.display = 'none';
+        const overlay = document.getElementById('manualEntryModal');
+        if (overlayClickHandler) { overlay.removeEventListener('click', overlayClickHandler); overlayClickHandler = null; }
+        overlay.style.display = 'none';
         currentPunches = [];
         currentEditDate = null;
       }
