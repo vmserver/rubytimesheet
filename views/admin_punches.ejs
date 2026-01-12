@@ -4,7 +4,19 @@
     user,
     body: `
       <section class="card recent-punches">
-        <h1>Recent Punches</h1>
+        <div class="card-header">
+          <h1>Recent Punches</h1>
+          <div class="clock-pill" id="ny-clock">
+            <div class="clock-pill-time">
+              <span class="time-main" id="ny-time-main">${(nyClock && nyClock.timeMain) ? nyClock.timeMain : ''}</span>
+              <span class="time-ampm" id="ny-time-ampm">${(nyClock && nyClock.ampm) ? nyClock.ampm : ''}</span>
+            </div>
+            <span class="clock-divider" aria-hidden="true"></span>
+            <div class="clock-pill-date">
+              <span class="date-text" id="ny-date-full">${(nyClock && nyClock.dateFull) ? nyClock.dateFull : ''}</span>
+            </div>
+          </div>
+        </div>
         <div class="table-scroll">
           <table class="table">
             <thead>

@@ -119,6 +119,40 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  try {
+    const now = new Date();
+    const tParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: TIMEZONE,
+      hour12: true,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }).formatToParts(now);
+    const hh = tParts.find(p => p.type === 'hour')?.value || '';
+    const mm = tParts.find(p => p.type === 'minute')?.value || '';
+    const ss = tParts.find(p => p.type === 'second')?.value || '';
+    const dp = tParts.find(p => p.type === 'dayPeriod')?.value || '';
+    const dParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: TIMEZONE,
+      month: 'short',
+      day: '2-digit',
+      year: 'numeric'
+    }).formatToParts(now);
+    const mon = dParts.find(p => p.type === 'month')?.value || '';
+    const day = dParts.find(p => p.type === 'day')?.value || '';
+    const yr = dParts.find(p => p.type === 'year')?.value || '';
+    res.locals.nyClock = {
+      timeMain: hh + ':' + mm + ':' + ss,
+      ampm: dp ? dp.toUpperCase() : '',
+      dateFull: mon + ' ' + day + ' ' + yr
+    };
+  } catch (e) {
+    res.locals.nyClock = { timeMain: '', ampm: '', dateFull: '' };
+  }
+  next();
+});
+
 app.use(async (req, res, next) => {
   try {
     if (req.session && req.session.user && !req.session.rollover_checked) {

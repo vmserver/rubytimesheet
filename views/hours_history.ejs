@@ -17,6 +17,7 @@
     </script>
     <link rel="stylesheet" href="/styles.css" />
     <script src="/userMenu.js" defer></script>
+    <script src="/clock.js" defer></script>
   </head>
   <body>
     <header class="topbar">
@@ -64,7 +65,19 @@
 
     <main class="container">
       <section class="card hours-history">
-        <h1>Hours History</h1>
+        <div class="card-header">
+          <h1>Hours History</h1>
+          <div class="clock-pill" id="ny-clock">
+            <div class="clock-pill-time">
+              <span class="time-main" id="ny-time-main"><%= (nyClock && nyClock.timeMain) ? nyClock.timeMain : '' %></span>
+              <span class="time-ampm" id="ny-time-ampm"><%= (nyClock && nyClock.ampm) ? nyClock.ampm : '' %></span>
+            </div>
+            <span class="clock-divider" aria-hidden="true"></span>
+            <div class="clock-pill-date">
+              <span class="date-text" id="ny-date-full"><%= (nyClock && nyClock.dateFull) ? nyClock.dateFull : '' %></span>
+            </div>
+          </div>
+        </div>
         
         <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
           <div class="alert"><%= errorMessage %></div>

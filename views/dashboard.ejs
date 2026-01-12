@@ -17,6 +17,7 @@
     </script>
     <link rel="stylesheet" href="/styles.css" />
     <script src="/userMenu.js" defer></script>
+    <script src="/clock.js" defer></script>
   </head>
   <body>
     <header class="topbar">
@@ -72,12 +73,12 @@
           <h1>Hi <%= user.name %>, record your time</h1>
           <div class="clock-pill" id="ny-clock">
             <div class="clock-pill-time">
-              <span class="time-main" id="ny-time-main"></span>
-              <span class="time-ampm" id="ny-time-ampm"></span>
+              <span class="time-main" id="ny-time-main"><%= (nyClock && nyClock.timeMain) ? nyClock.timeMain : '' %></span>
+              <span class="time-ampm" id="ny-time-ampm"><%= (nyClock && nyClock.ampm) ? nyClock.ampm : '' %></span>
             </div>
             <span class="clock-divider" aria-hidden="true"></span>
             <div class="clock-pill-date">
-              <span class="date-text" id="ny-date-full"></span>
+              <span class="date-text" id="ny-date-full"><%= (nyClock && nyClock.dateFull) ? nyClock.dateFull : '' %></span>
             </div>
           </div>
         </div>
@@ -163,40 +164,5 @@
       <% } %>
     </main>
   </body>
-  <script>
-    (function() {
-      var tMain = document.getElementById('ny-time-main');
-      var tAmPm = document.getElementById('ny-time-ampm');
-      var dText = document.getElementById('ny-date-full');
-      function tick() {
-        var now = new Date();
-        var parts = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'America/New_York',
-          hour12: true,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        }).formatToParts(now);
-        var hh = parts.find(p => p.type === 'hour')?.value || '';
-        var mm = parts.find(p => p.type === 'minute')?.value || '';
-        var ss = parts.find(p => p.type === 'second')?.value || '';
-        var dp = parts.find(p => p.type === 'dayPeriod')?.value || '';
-        if (tMain) tMain.textContent = hh + ':' + mm + ':' + ss;
-        if (tAmPm) tAmPm.textContent = dp ? dp.toUpperCase() : '';
-        var dparts = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'America/New_York',
-          month: 'short',
-          day: '2-digit',
-          year: 'numeric'
-        }).formatToParts(now);
-        var mon = dparts.find(p => p.type === 'month')?.value || '';
-        var day = dparts.find(p => p.type === 'day')?.value || '';
-        var yr = dparts.find(p => p.type === 'year')?.value || '';
-        if (dText) dText.textContent = mon + ' ' + day + ' ' + yr;
-      }
-      tick();
-      setInterval(tick, 1000);
-    })();
-  </script>
   
-</html>
+  </html>
