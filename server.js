@@ -716,7 +716,16 @@ app.get('/admin/employees', requireAuth, requireAdmin, async (req, res) => {
 
 app.get('/admin/export', requireAuth, requireAdmin, (req, res) => {
   try {
-    res.render('admin_export', { user: req.session.user });
+    res.render('admin_export', { user: req.session.user, exportAction: '/export.xlsx' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+});
+
+app.get('/export', requireAuth, (req, res) => {
+  try {
+    res.render('admin_export', { user: req.session.user, exportAction: '/export.xlsx' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
@@ -724,7 +733,7 @@ app.get('/admin/export', requireAuth, requireAdmin, (req, res) => {
 });
 
 
-app.get('/admin/export.xlsx', requireAuth, requireAdmin, async (req, res) => {
+async function handleExportExcel(req, res) {
   try {
     const REGULAR_HOURS_PER_DAY = parseFloat(process.env.REGULAR_HOURS_PER_DAY || '8');
     const MAX_EXPORT_DAYS = parseInt(process.env.MAX_EXPORT_DAYS || '730', 10);
@@ -913,6 +922,14 @@ app.get('/admin/export.xlsx', requireAuth, requireAdmin, async (req, res) => {
     console.error(err);
     res.status(500).send('Server error');
   }
+}
+
+app.get('/admin/export.xlsx', requireAuth, requireAdmin, async (req, res) => {
+  await handleExportExcel(req, res);
+});
+
+app.get('/export.xlsx', requireAuth, async (req, res) => {
+  await handleExportExcel(req, res);
 });
 
 app.get('/health', async (req, res) => {
