@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hours History - All Employees</title>
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('theme') || 'light';
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved = saved === 'system' ? (prefersDark ? 'dark' : 'light') : saved;
+          if (resolved !== 'dark' && resolved !== 'light') { resolved = 'light'; }
+          if (resolved === 'dark') { document.documentElement.classList.add('dark'); }
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/userMenu.js" defer></script>
+    <script src="/clock.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a href="/dashboard" class="brand" aria-label="Dashboard"><%= brand %></a>
+      <% if (user) { %>
+        <div class="topbar-nav">
+          <button onclick="window.history.back()" class="btn btn-nav">← Back</button>
+          <a href="/dashboard" class="btn btn-nav">Home</a>
+        </div>
+        <div class="topbar-right">
+          <div class="user-menu">
+            <button type="button" class="user-menu-trigger" id="user-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="User menu">
+              <svg viewBox="0 0 24 24" width="24" height="24">
+                <circle class="circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle>
+                <circle class="head" cx="12" cy="8" r="3" fill="currentColor"></circle>
+                <path class="body" d="M12 13 Q 8 13 7 16 Q 12 18 17 16 Q 16 13 12 13" fill="currentColor"></path>
+              </svg>
+            </button>
+            <div class="user-menu-panel" id="user-menu-panel" role="menu" aria-hidden="true">
+              <div class="user-menu-header">
+                <div class="user-name"><%= user.name %><% if (user.is_admin) { %> (Admin)<% } %></div>
+                <% if (typeof user.email !== 'undefined' && user.email) { %>
+                  <div class="user-email"><%= user.email %></div>
+                <% } %>
+              </div>
+              <div class="menu-divider" aria-hidden="true"></div>
+              <div class="user-menu-actions">
+                <div class="user-menu-section">
+                  <a href="/export" class="section-label icon-link" role="menuitem" aria-label="Export Timesheet">
+                    <svg class="menu-icon" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 256 256" enable-background="new 0 0 256 256" xml:space="preserve" aria-hidden="true">
+                      <g><g><path fill="#000000" d="M113.1,208.4H111l-1.8-1.7c-1.8-1.9-1.7-4.2-1.7-5c0.5-14.1,6.8-83.1,80-86.1V93.4c-0.1-1.3-0.1-4.1,1.9-6.3c2.3-2.6,5.9-3.2,10.1-1.3l1,0.4l41.1,44.7c0.8,1,4.3,5.3,4.3,10.5c0,5.3-4.3,9.9-5.2,10.8l-41.2,47.4c-1.1,1.1-3.6,3.4-6.9,3.4c-2.6,0-4.8-1.4-6-3.8c-0.9-1.6-1.3-3.7-1.3-6.5v-26.9c-11.9-0.3-46.5,2.1-66.7,38.9C117.4,207,115.4,208.4,113.1,208.4L113.1,208.4z M183.8,155.5c4.5,0,7.4,0.4,7.5,0.4l4.3,0.6v32.1l37.8-43.5c1.3-1.4,2.5-3.2,2.5-3.9c0-1-1-2.9-1.8-3.8l-36.4-39.6l0,27.7h-5.1c-52.2,0-68.1,35.5-73,59.7C141.5,158.7,170.9,155.5,183.8,155.5z"/><path fill="#000000" d="M171.3,213.1c-2.5,0.7-5,1.1-7.7,1.1H49.2c-14.7,0-26.7-11.2-26.7-25.9V68.5c0-14.7,11.9-26.7,26.7-26.7h114.3c0,0,0,0,0,0c0.4,0,0.7,0,1.1,0c0.1,0,0.2,0,0.4,0c0.3,0,0.6,0,0.9,0.1c0.2,0,0.3,0,0.5,0c0.3,0,0.5,0,0.7,0.1c0.2,0,0.4,0,0.5,0.1c0.2,0,0.4,0.1,0.6,0.1c0.3,0,0.7,0.1,1,0.2c0.1,0,0.3,0,0.4,0.1c0.2,0,0.5,0.1,0.7,0.2c0.1,0,0.1,0,0.2,0c0.5,0.1,1,0.3,1.5,0.5h0c5.9,2,10.9,6,14.1,11.2h0c2.4,3.8,3.8,8.2,4,13h12.5v-0.6c0-4.3-0.7-8.5-2.1-12.3h0.2c-5-14.3-18.4-24.7-34.3-25.1c-0.2,0-0.4,0-0.7,0c-0.1,0-0.2,0-0.3,0h-118C26.7,29.3,10,46,10,66.7v122.7c0,20.7,16.7,37.4,37.4,37.4h117.9c11.6,0,22-5.3,28.8-13.6L171.3,213.1L171.3,213.1L171.3,213.1z"/><path fill="#000000" d="M41.3,89.4h108.3v12.5H41.3V89.4z"/><path fill="#000000" d="M41.3,122.4h79.2v12.5H41.3V122.4z"/><path fill="#000000" d="M41.3,154.1h56.5v12.5H41.3V154.1L41.3,154.1z"/></g></g>
+                    </svg>
+                    <span>Export Timesheet</span>
+                  </a>
+                </div>
+                <div class="user-menu-section">
+                  <div class="section-label icon-link" role="presentation">
+                    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <g class="sun" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                      </g>
+                      <g class="moon">
+                        <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path>
+                      </g>
+                    </svg>
+                    <span>Theme</span>
+                  </div>
+                  <div class="theme-options" role="group" aria-label="Theme">
+                    <button type="button" class="menu-item" role="menuitemradio" data-theme-option="dark" aria-checked="false">Dark</button>
+                    <button type="button" class="menu-item" role="menuitemradio" data-theme-option="light" aria-checked="true">Light</button>
+                    <button type="button" class="menu-item" role="menuitemradio" data-theme-option="system" aria-checked="false">System</button>
+                  </div>
+                </div>
+                <div class="menu-divider" aria-hidden="true"></div>
+                <form method="post" action="/logout">
+                  <button type="submit" class="menu-item icon-link" role="menuitem" aria-label="Log out">
+                    <svg class="menu-icon" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 256 256" xml:space="preserve" aria-hidden="true">
+                      <g>
+                        <path fill="#000000" d="M10,68.1c0-16.6,13.4-30,29.9-30h96.6c16.5,0,29.9,13.5,29.9,30v19.4c0,3.3-2.6,5.9-5.9,5.9c0,0,0,0,0,0 c-3.3,0-5.9-2.7-5.9-5.9c0,0,0,0,0,0V68.1c0-10-8.1-18.1-18.1-18.1H39.9c-10,0-18.1,8.2-18.1,18.1v119.8c0,10,8.1,18.1,18.1,18.1 h96.5c10,0,18.1-8.2,18.1-18.1v-19.4c0-3.3,2.6-5.9,5.9-5.9c0,0,0,0,0,0c3.3,0,5.9,2.7,5.9,5.9c0,0,0,0,0,0v19.4 c0,16.5-13.4,30-29.9,30H39.9c-16.5,0-29.9-13.5-29.9-30V68.1z M195.5,172.6c-2.3-2.3-2.3-6,0-8.3c0,0,0,0,0,0l30.3-30.4H115.2 c-3.3,0-5.9-2.7-5.9-5.9c0,0,0,0,0,0c0-3.3,2.6-5.9,5.9-5.9c0,0,0,0,0,0h110.7l-30.3-30.4c-2.3-2.3-2.3-6,0-8.3c0,0,0,0,0,0 c2.3-2.3,6-2.3,8.3,0c0,0,0,0,0,0l40.4,40.5c2.3,2.3,2.3,6,0,8.3c0,0,0,0,0,0l-40.4,40.5c-1.1,1.1-2.6,1.7-4.2,1.7 C198.2,174.4,196.7,173.8,195.5,172.6L195.5,172.6z"/>
+                      </g>
+                    </svg>
+                    <span>Log out</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% } %>
+    </header>
+
+    <main class="container">
+      <section class="card hours-history hours-history-all">
+        <div class="card-header">
+          <h1>Hours History (All Employees)</h1>
+          <div class="clock-pill" id="ny-clock">
+            <div class="clock-pill-time">
+              <span class="time-main" id="ny-time-main"><%= (nyClock && nyClock.timeMain) ? nyClock.timeMain : '' %></span>
+              <span class="time-ampm" id="ny-time-ampm"><%= (nyClock && nyClock.ampm) ? nyClock.ampm : '' %></span>
+            </div>
+            <span class="clock-divider" aria-hidden="true"></span>
+            <div class="clock-pill-date">
+              <span class="date-text" id="ny-date-full"><%= (nyClock && nyClock.dateFull) ? nyClock.dateFull : '' %></span>
+            </div>
+          </div>
+        </div>
+
+        <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+          <div class="alert"><%= errorMessage %></div>
+        <% } %>
+
+        <form method="get" action="/admin/hours" class="date-range-form" onsubmit="return validateDateRange()">
+          <label for="startDate">From:</label>
+          <input type="date" id="startDate" name="startDate" value="<%= (typeof startDate !== 'undefined' && startDate) ? startDate : '' %>" required />
+
+          <label for="endDate">To:</label>
+          <input type="date" id="endDate" name="endDate" value="<%= (typeof endDate !== 'undefined' && endDate) ? endDate : '' %>" required />
+
+          <button type="submit" class="btn btn-primary">View Hours</button>
+          <a href="/admin/hours" class="btn btn-outline">Clear Filter</a>
+
+          <div class="quick-filters">
+            <button type="button" onclick="setDateRange(7)" class="btn btn-outline">Last 7 days</button>
+            <button type="button" onclick="setDateRange(30)" class="btn btn-outline">Last 30 days</button>
+            <button type="button" onclick="setDateRange(90)" class="btn btn-outline">Last 90 days</button>
+            <button type="button" onclick="setDateRange(365)" class="btn btn-outline">Last year</button>
+          </div>
+        </form>
+
+
+
+        <% 
+          var summary = {};
+          employees.forEach(function(emp){ summary[emp.id] = { total: 0, weekdayOT: 0, weekend: 0 }; });
+          hoursByDateAll.forEach(function(day){
+            var parts = day.date.split('/');
+            var month = parseInt(parts[0], 10);
+            var dayNum = parseInt(parts[1], 10);
+            var year = parseInt(parts[2], 10);
+            var dow = new Date(year, month - 1, dayNum).getDay();
+            employees.forEach(function(emp){
+              var h = day.perEmp[emp.id] ? parseFloat(day.perEmp[emp.id].hours) : 0;
+              summary[emp.id].total += h;
+              if (dow >= 1 && dow <= 5) { summary[emp.id].weekdayOT += Math.max(0, h - 8); }
+              else { summary[emp.id].weekend += h; }
+            });
+          });
+        %>
+        <div class="hours-table-group">
+          <div class="table-scroll">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <% employees.forEach(function(emp){ %>
+                    <th><%= emp.name %></th>
+                  <% }); %>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (hoursByDateAll.length === 0) { %>
+                  <tr>
+                    <td colspan="<%= 1 + employees.length %>">No hours recorded in this period.</td>
+                  </tr>
+                <% } else { %>
+                  <% hoursByDateAll.forEach(function(day) { %>
+                    <tr>
+                      <td><%= day.date %></td>
+                      <% employees.forEach(function(emp){ %>
+                        <td>
+                          <strong class="editable-hours" onclick="openManualEntry('<%= day.date %>', <%= emp.id %>)" title="Click to edit punches">
+                            <%= (day.perEmp[emp.id] ? day.perEmp[emp.id].hoursDisplay : '0.00') %> hours
+                          </strong>
+                        </td>
+                      <% }); %>
+                    </tr>
+                  <% }); %>
+                <% } %>
+              </tbody>
+              <tfoot>
+                <tr class="summary-row">
+                  <td>Total</td>
+                  <% employees.forEach(function(emp){ %>
+                    <td><%= summary[emp.id].total.toFixed(2) %> hours</td>
+                  <% }); %>
+                </tr>
+                <tr class="summary-row">
+                  <td>Weekday Overtime</td>
+                  <% employees.forEach(function(emp){ %>
+                    <td><%= summary[emp.id].weekdayOT.toFixed(2) %> hours</td>
+                  <% }); %>
+                </tr>
+                <tr class="summary-row">
+                  <td>Weekend Hours</td>
+                  <% employees.forEach(function(emp){ %>
+                    <td><%= summary[emp.id].weekend.toFixed(2) %> hours</td>
+                  <% }); %>
+                </tr>
+                <tr class="summary-row-highlight">
+                  <td>Total Extra Hours</td>
+                  <% employees.forEach(function(emp){ %>
+                    <td><%= (summary[emp.id].weekdayOT + summary[emp.id].weekend).toFixed(2) %> hours</td>
+                  <% }); %>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+      </section>
+    </main>
+
+    <style>
+      /* Make table layout auto so columns fit content */
+      .hours-history-all .table { 
+        table-layout: auto; 
+        width: auto; /* Allow table to shrink/grow exactly to content */
+        border-collapse: collapse;
+        margin: 0;
+      }
+      .hours-history-all .table-scroll {
+        overflow-x: auto;
+        position: relative;
+      }
+      
+      /* Header wrapping logic: 
+         1. th gets width: 1px to suggest it should be small.
+         2. td gets white-space: nowrap to force minimum width based on content.
+         3. Result: Column width = max(header_min, content_width). 
+            Since header prefers 1px, content width usually wins, forcing header to wrap.
+      */
+      .hours-history-all .table thead th { 
+        white-space: normal; 
+        overflow-wrap: break-word; 
+        word-wrap: break-word;
+        vertical-align: bottom;
+        width: 1px; /* The trick to make header wrap to content width */
+        padding: 1px 3px; /* Extremely tight padding */
+        line-height: 1.1;
+        
+        /* Sticky Header Row (Vertical Scroll) */
+        position: sticky;
+        top: 0;
+        z-index: 20; /* Higher than body content (which is 10 for first col) */
+        background-color: var(--bg-card); /* Opaque background */
+        box-shadow: 0 1px 0 var(--border-color); /* Bottom border for sticky header */
+      }
+      
+      .hours-history-all .table tbody td { 
+        white-space: nowrap; 
+        padding: 1px 3px; /* Extremely tight padding */
+        line-height: 1.1;
+      }
+      
+      .hours-history-all .editable-hours { 
+        white-space: nowrap; 
+        display: inline-block; 
+      }
+
+      /* Sticky First Column (Horizontal Scroll) */
+      .hours-history-all .table th:first-child,
+      .hours-history-all .table td:first-child { 
+        position: sticky;
+        left: 0;
+        background-color: var(--bg-card);
+        z-index: 10;
+        border-right: 1px solid var(--border-color);
+        /* Ensure Date column header doesn't squash too much if content is small */
+        width: auto; 
+        white-space: nowrap;
+      }
+
+      /* Top Left Corner (Date Header) - Intersection of sticky row and sticky col */
+      .hours-history-all .table thead th:first-child {
+        white-space: nowrap;
+        width: auto;
+        z-index: 30; /* Highest z-index to stay on top of everything */
+        /* It inherits left: 0 from 'th:first-child' and top: 0 from 'thead th' */
+      }
+      
+      /* Tighter first column padding */
+      .hours-history-all .table td:first-child { padding: 2px 4px; font-weight: 500; }
+      .hours-history-all .table thead th:first-child { padding: 2px 4px; }
+
+      .hours-history-all .table th:not(:first-child),
+      .hours-history-all .table td:not(:first-child) { 
+        width: auto; 
+        text-align: center; 
+      }
+
+      /* Totals footer: visually separate from table content but remain aligned and scrollable */
+      .hours-history-all .table tfoot {
+        position: sticky;
+        bottom: 0;
+        z-index: 40;
+        background-color: var(--bg-card);
+        box-shadow: 0 -1px 0 var(--border-color);
+      }
+      .hours-history-all .table tfoot tr td {
+        padding: 2px 3px;
+        line-height: 1.1;
+        white-space: nowrap;
+        border-bottom: 1px solid var(--border-color);
+        background-color: var(--bg-card);
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+      }
+      .hours-history-all .table tfoot tr td:hover {
+        border-bottom-color: var(--primary);
+        background-color: rgba(0, 0, 0, 0.02);
+      }
+      .hours-history-all .table tfoot tr td:focus {
+        outline: none;
+        border-bottom-color: var(--primary);
+        background-color: rgba(0, 0, 0, 0.03);
+      }
+      .hours-history-all .table tfoot tr td:first-child {
+        position: sticky;
+        left: 0;
+        background-color: var(--bg-card);
+        z-index: 16; /* above other footer cells to mirror first column stickiness */
+        border-right: 1px solid var(--border-color);
+      }
+      .hours-history-all .table tfoot .summary-row-highlight td {
+        background-color: rgba(0, 0, 0, 0.035);
+      }
+      
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
+        background: var(--bg-card);
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .modal-header h2 { margin: 0; font-size: 1.25rem; }
+      .close-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--text-muted);
+      }
+      .modal-body {
+        overflow-y: auto;
+        flex-grow: 1;
+        padding-bottom: 1rem;
+      }
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border-color);
+      }
+      .punch-row {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+        align-items: center;
+      }
+      .punch-row select, .punch-row input {
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
+        border: 1px solid var(--border-input);
+        background: var(--bg-input);
+        color: var(--text-main);
+        font-family: inherit;
+        font-size: 1rem;
+        height: 40px;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        color-scheme: normal;
+      }
+      .punch-row select:focus, .punch-row input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--border-focus);
+      }
+      .punch-row select { flex: 1.5; cursor: pointer; }
+      .punch-row input[type="time"] { flex: 1; cursor: text; }
+      .punch-row .btn-danger {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        line-height: 1;
+        flex-shrink: 0;
+        font-size: 1.25rem;
+        margin-left: 0.25rem;
+      }
+      .editable-hours { cursor: pointer; border-bottom: 1px dashed var(--text-muted); }
+      .editable-hours:hover { color: var(--primary); border-bottom-color: var(--primary); }
+    </style>
+
+    <script>
+      function setDateRange(days) {
+        const now = new Date();
+        const todayNYStr = now.toLocaleDateString('en-US', { 
+          timeZone: 'America/New_York',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        const [todayMonth, todayDay, todayYear] = todayNYStr.split('/').map(Number);
+        const todayNY = new Date(todayYear, todayMonth - 1, todayDay);
+        const startNY = new Date(todayNY);
+        startNY.setDate(startNY.getDate() - days);
+        const formatDate = (date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        };
+        document.getElementById('startDate').value = formatDate(startNY);
+        document.getElementById('endDate').value = formatDate(todayNY);
+        document.querySelector('.date-range-form').submit();
+      }
+
+      function validateDateRange() {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const today = new Date().toISOString().split('T')[0];
+        if (!startDate || !endDate) { alert('Please select both start and end dates.'); return false; }
+        if (endDate > today) { alert('Please select a valid date range. End date cannot be in the future.'); return false; }
+        if (startDate > endDate) { alert('Please select a valid date range. Start date must be before end date.'); return false; }
+        return true;
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('startDate').setAttribute('max', today);
+        document.getElementById('endDate').setAttribute('max', today);
+      });
+
+      let currentPunches = [];
+      let currentEditDate = null;
+      let currentEditUserId = null;
+      let overlayClickHandler = null;
+
+      async function openManualEntry(date, userId) {
+        currentEditDate = date;
+        currentEditUserId = userId;
+        document.getElementById('modalDateTitle').textContent = `Edit Punches - ${date}`;
+        const overlay = document.getElementById('manualEntryModal');
+        overlay.style.display = 'flex';
+        overlayClickHandler = function(e){ if (e.target === overlay) closeManualEntry(); };
+        overlay.addEventListener('click', overlayClickHandler);
+        document.getElementById('loadingPunches').style.display = 'block';
+        document.getElementById('punchesContainer').innerHTML = '';
+        document.getElementById('modalError').style.display = 'none';
+
+        try {
+          const response = await fetch(`/api/punches?date=${encodeURIComponent(date)}&userId=${encodeURIComponent(userId)}`);
+          if (!response.ok) { throw new Error(`Server returned ${response.status}`); }
+          const data = await response.json();
+          if (data.ok) {
+            currentPunches = data.punches.map(p => {
+              const d = new Date(p.punched_at);
+              const timeStr = d.toLocaleTimeString('en-US', {
+                timeZone: 'America/New_York',
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+              return { ...p, time: timeStr };
+            });
+            renderPunches();
+          } else {
+            showError(data.error || 'Failed to load punches');
+          }
+        } catch (e) {
+          showError('Network error');
+        } finally {
+          document.getElementById('loadingPunches').style.display = 'none';
+        }
+      }
+
+      function closeManualEntry() {
+        const overlay = document.getElementById('manualEntryModal');
+        if (overlayClickHandler) { overlay.removeEventListener('click', overlayClickHandler); overlayClickHandler = null; }
+        overlay.style.display = 'none';
+        currentPunches = [];
+        currentEditDate = null;
+        currentEditUserId = null;
+      }
+
+      function renderPunches() {
+        const container = document.getElementById('punchesContainer');
+        container.innerHTML = '';
+        if (currentPunches.length === 0) { container.innerHTML = '<p class="text-muted">No punches for this day.</p>'; }
+        currentPunches.forEach((punch, index) => {
+          const row = document.createElement('div');
+          row.className = 'punch-row';
+          row.innerHTML = `
+            <select onchange="updatePunch(${index}, 'punch_type', this.value)">
+              <option value="in" ${punch.punch_type === 'in' ? 'selected' : ''}>In</option>
+              <option value="out" ${punch.punch_type === 'out' ? 'selected' : ''}>Out</option>
+              <option value="break_start" ${punch.punch_type === 'break_start' ? 'selected' : ''}>Break Start</option>
+              <option value="break_end" ${punch.punch_type === 'break_end' ? 'selected' : ''}>Break End</option>
+            </select>
+            <input type="time" value="${punch.time}" onchange="updatePunch(${index}, 'time', this.value)" required>
+            <button type="button" class="btn btn-danger btn-small" onclick="deletePunch(${index})">&times;</button>
+          `;
+          container.appendChild(row);
+        });
+        const warningContainer = document.createElement('div');
+        warningContainer.id = 'warningContainer';
+        container.appendChild(warningContainer);
+        updateValidationUI();
+      }
+
+      function validateSequence() {
+        const warnings = [];
+        let state = 'out';
+        const sorted = [...currentPunches]
+          .filter(p => p.time)
+          .sort((a, b) => a.time.localeCompare(b.time));
+        sorted.forEach((p) => {
+          const t = p.time;
+          if (p.punch_type === 'in') { if (state !== 'out') warnings.push(`${t}: Clock In while already logged in/on break.`); state = 'in'; }
+          else if (p.punch_type === 'out') { if (state !== 'in') warnings.push(`${t}: Clock Out without being logged in.`); state = 'out'; }
+          else if (p.punch_type === 'break_start') { if (state !== 'in') warnings.push(`${t}: Start Break without being logged in.`); state = 'break'; }
+          else if (p.punch_type === 'break_end') { if (state !== 'break') warnings.push(`${t}: End Break without starting one.`); state = 'in'; }
+        });
+        if (state !== 'out' && sorted.length > 0) warnings.push('Warning: Day ends while still logged in or on break.');
+        return warnings;
+      }
+
+      function addPunchRow() { currentPunches.push({ punch_type: 'in', time: '09:00' }); renderPunches(); }
+      function updatePunch(index, field, value) { currentPunches[index][field] = value; updateValidationUI(); }
+      function updateValidationUI() {
+        const warnings = validateSequence();
+        const container = document.getElementById('warningContainer');
+        if (!container) return;
+        container.innerHTML = warnings.length > 0 ? '<div class="alert" style="margin-top: 10px; font-size: 0.85rem;"><strong>Sequence Warnings:</strong><br>' + warnings.join('<br>') + '</div>' : '';
+      }
+      function deletePunch(index) { currentPunches.splice(index, 1); renderPunches(); }
+      function showError(msg) { const el = document.getElementById('modalError'); el.textContent = msg; el.style.display = 'block'; }
+      async function savePunches() {
+        for (const p of currentPunches) { if (!p.time) { showError('All punches must have a time.'); return; } }
+        currentPunches.sort((a, b) => a.time.localeCompare(b.time));
+        try {
+          const response = await fetch('/api/save_manual_punches', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date: currentEditDate, punches: currentPunches, userId: currentEditUserId })
+          });
+          if (!response.ok) { throw new Error(`Server returned ${response.status}`); }
+          const data = await response.json();
+          if (data.ok) { closeManualEntry(); window.location.reload(); } else { showError(data.error || 'Failed to save punches'); }
+        } catch (e) { showError('Network error'); }
+      }
+    </script>
+
+    <div id="manualEntryModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalDateTitle">Edit Punches</h2>
+          <button type="button" class="close-btn" onclick="closeManualEntry()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="loadingPunches" style="display: none;">Loading...</div>
+          <div id="punchesContainer"></div>
+          <button type="button" class="btn btn-outline btn-small" onclick="addPunchRow()" style="margin-top: 10px;">+ Add Punch</button>
+          <div id="modalError" class="alert" style="display: none; margin-top: 10px;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeManualEntry()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="savePunches()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </body>
+  <script>
+    (function(){
+      try { console.log('UI Boot', { route: location.pathname }); } catch(_) {}
+      document.addEventListener('keydown', function(e){
+        var k = e.key || '';
+        if ((k === 'd' || k === 'D') && e.ctrlKey && e.altKey) {
+          var levels = ['info','warning','error','off'];
+          var cur = localStorage.getItem('debug.level') || 'info';
+          var idx = levels.indexOf(cur);
+          var next = levels[(idx >= 0 ? idx : 0) + 1 >= levels.length ? 0 : (idx + 1)];
+          try { localStorage.setItem('debug.level', next); console.log('Debug level set to', next); } catch(_) {}
+        }
+      });
+    })();
+  </script>
+</html>

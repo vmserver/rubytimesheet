@@ -201,9 +201,13 @@ function calculateHours(punches, currentTime = null) {
   let breakStart = null; // When the current break started (if any)
   
   // Process punches in chronological order
-  const sortedPunches = [...punches].sort((a, b) => 
-    new Date(a.punched_at) - new Date(b.punched_at)
-  );
+  // Fix: stable sort for identical timestamps (In < Break Start < Break End < Out)
+  const punchOrder = { 'in': 1, 'break_start': 2, 'break_end': 3, 'out': 4 };
+  const sortedPunches = [...punches].sort((a, b) => {
+    const timeDiff = new Date(a.punched_at) - new Date(b.punched_at);
+    if (timeDiff !== 0) return timeDiff;
+    return (punchOrder[a.punch_type] || 0) - (punchOrder[b.punch_type] || 0);
+  });
   
   console.log('calculateHours: Processing', sortedPunches.length, 'punches');
   console.log('calculateHours: Punch sequence:', sortedPunches.map(p => `${p.punch_type}@${new Date(p.punched_at).toISOString()}`).join(', '));
@@ -214,14 +218,13 @@ function calculateHours(punches, currentTime = null) {
     switch (punch.punch_type) {
       case 'in':
         // Starting a new work session
-        // If there was a previous incomplete session, it's already counted (or will be counted at out)
         inTime = punchTime;
         breakStart = null; // Clear any break state
         console.log('calculateHours: Punch IN at', punchTime.toISOString());
         break;
         
       case 'break_start':
-        // Starting a break - add work time from inTime (or last break_end) to break start
+        // Starting a break - add work time from inTime to break start
         if (inTime && !breakStart) {
           const workMinutes = (punchTime - inTime) / (1000 * 60);
           totalMinutes += workMinutes;
@@ -246,16 +249,15 @@ function calculateHours(punches, currentTime = null) {
         break;
         
       case 'out':
-        // Ending work session - add time from inTime (or last break_end) to out
+        // Ending work session - add time from inTime to out
         if (inTime && !breakStart) {
           const workMinutes = (punchTime - inTime) / (1000 * 60);
           totalMinutes += workMinutes;
           console.log('calculateHours: Punch OUT - added', workMinutes.toFixed(2), 'minutes of work, total:', totalMinutes.toFixed(2));
         } else if (inTime && breakStart) {
-          // Out while on break - add work time up to break start only
-          const workMinutes = (breakStart - inTime) / (1000 * 60);
-          totalMinutes += workMinutes;
-          console.log('calculateHours: Punch OUT during break - added', workMinutes.toFixed(2), 'minutes (up to break start), total:', totalMinutes.toFixed(2));
+          // Out while on break - work time up to break start was already added at break_start
+          // Just reset the state
+          console.log('calculateHours: Punch OUT during break - work time already counted at break_start');
         } else {
           console.log('calculateHours: WARNING - punch out without punch in, ignoring');
         }
@@ -266,18 +268,15 @@ function calculateHours(punches, currentTime = null) {
     }
   }
   
-  // If still punched in at the end (no out), add remaining time up to now
-  if (inTime && !breakStart) {
-    const endTime = currentTime || new Date();
+  // If still punched in at the end (no out), add remaining time up to currentTime
+  // Fix: Only calculate if currentTime is provided. Do NOT default to new Date() for past dates.
+  if (inTime && !breakStart && currentTime) {
+    const endTime = currentTime;
     const remainingMinutes = (endTime - inTime) / (1000 * 60);
     totalMinutes += remainingMinutes;
     console.log('calculateHours: Still punched in - added', remainingMinutes.toFixed(2), 'minutes, total:', totalMinutes.toFixed(2));
-  } else if (inTime && breakStart) {
-    // Still on break - only count work time up to break start
-    const workMinutes = (breakStart - inTime) / (1000 * 60);
-    totalMinutes += workMinutes;
-    console.log('calculateHours: Still on break - added', workMinutes.toFixed(2), 'minutes (up to break start), total:', totalMinutes.toFixed(2));
-  }
+  } 
+  // If still on break, work time up to break start was already added, so nothing to add.
   
   const hours = totalMinutes / 60;
   console.log('calculateHours: Final result', hours.toFixed(2), 'hours (', totalMinutes.toFixed(2), 'minutes)');
@@ -930,6 +929,136 @@ app.get('/admin/export.xlsx', requireAuth, requireAdmin, async (req, res) => {
 
 app.get('/export.xlsx', requireAuth, async (req, res) => {
   await handleExportExcel(req, res);
+});
+
+app.get('/admin/hours', requireAuth, requireAdmin, async (req, res) => {
+  let errorMessage = null;
+  try {
+    let startDateFormatted = req.query.startDate;
+    let endDateFormatted = req.query.endDate;
+    const now = new Date();
+    const nyFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = nyFormatter.formatToParts(now);
+    const todayYear = parseInt(parts.find(p => p.type === 'year').value);
+    const todayMonth = parseInt(parts.find(p => p.type === 'month').value);
+    const todayDay = parseInt(parts.find(p => p.type === 'day').value);
+    const todayFormatted = `${todayYear}-${String(todayMonth).padStart(2, '0')}-${String(todayDay).padStart(2, '0')}`;
+
+    if (!startDateFormatted || !endDateFormatted) {
+      endDateFormatted = todayFormatted;
+      const todayNY = new Date(todayYear, todayMonth - 1, todayDay);
+      const startNY = new Date(todayNY);
+      startNY.setDate(startNY.getDate() - 89);
+      const startYear = startNY.getFullYear();
+      const startMonth = startNY.getMonth() + 1;
+      const startDay = startNY.getDate();
+      startDateFormatted = `${startYear}-${String(startMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+    } else {
+      if (endDateFormatted > todayFormatted) {
+        errorMessage = 'Please select a valid date range. End date cannot be in the future.';
+        endDateFormatted = todayFormatted;
+        const todayNY = new Date(todayYear, todayMonth - 1, todayDay);
+        const startNY = new Date(todayNY);
+        startNY.setDate(startNY.getDate() - 89);
+        const startYear = startNY.getFullYear();
+        const startMonth = startNY.getMonth() + 1;
+        const startDay = startNY.getDate();
+        startDateFormatted = `${startYear}-${String(startMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+      } else if (startDateFormatted > endDateFormatted) {
+        errorMessage = 'Please select a valid date range. Start date must be before end date.';
+        endDateFormatted = todayFormatted;
+        const todayNY = new Date(todayYear, todayMonth - 1, todayDay);
+        const startNY = new Date(todayNY);
+        startNY.setDate(startNY.getDate() - 89);
+        const startYear = startNY.getFullYear();
+        const startMonth = startNY.getMonth() + 1;
+        const startDay = startNY.getDate();
+        startDateFormatted = `${startYear}-${String(startMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+      }
+    }
+
+    const { rows: employees } = await pool.query(
+      `SELECT id, name FROM employees WHERE active = TRUE ORDER BY name`
+    );
+
+    const { rows: punches } = await pool.query(
+      `SELECT e.id AS employee_id, e.name, p.punch_type, p.punched_at
+       FROM punches p
+       JOIN employees e ON e.id = p.employee_id
+       WHERE ((p.punched_at AT TIME ZONE 'America/New_York')::date BETWEEN $1::date AND $2::date)
+       ORDER BY p.punched_at ASC`,
+      [startDateFormatted, endDateFormatted]
+    );
+
+    const [startY, startM, startD] = startDateFormatted.split('-').map(Number);
+    const [endY, endM, endD] = endDateFormatted.split('-').map(Number);
+    const startNoonUTC = Date.UTC(startY, startM - 1, startD, 12);
+    const endNoonUTC = Date.UTC(endY, endM - 1, endD, 12);
+    const dateKeys = [];
+    for (let t = startNoonUTC; t <= endNoonUTC; t += 24 * 60 * 60 * 1000) {
+      const d = new Date(t);
+      const dateKey = d.toLocaleDateString('en-US', {
+        timeZone: TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      dateKeys.push(dateKey);
+    }
+
+    const punchesByEmpByDate = new Map();
+    for (const p of punches) {
+      const dateKey = new Date(p.punched_at).toLocaleDateString('en-US', {
+        timeZone: TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      if (!punchesByEmpByDate.has(dateKey)) punchesByEmpByDate.set(dateKey, new Map());
+      const empMap = punchesByEmpByDate.get(dateKey);
+      if (!empMap.has(p.employee_id)) empMap.set(p.employee_id, []);
+      empMap.get(p.employee_id).push(p);
+    }
+
+    const nowLocal = new Date();
+    const hoursByDateAll = [];
+    for (const dateKey of dateKeys) {
+      const todayNYStr = new Date(nowLocal).toLocaleDateString('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+      const isToday = dateKey === todayNYStr;
+      const empMap = punchesByEmpByDate.get(dateKey) || new Map();
+      const perEmp = {};
+      for (const emp of employees) {
+        const dayPunches = empMap.get(emp.id) || [];
+        const sorted = [...dayPunches].sort((a, b) => new Date(a.punched_at) - new Date(b.punched_at));
+        const stillPunchedIn = isToday && sorted.length > 0 && (
+          sorted[sorted.length - 1].punch_type === 'in' ||
+          sorted[sorted.length - 1].punch_type === 'break_end' ||
+          sorted[sorted.length - 1].punch_type === 'break_start'
+        );
+        const totalHours = calculateHours(sorted, stillPunchedIn ? nowLocal : null);
+        perEmp[emp.id] = { hours: totalHours, hoursDisplay: (totalHours || 0).toFixed(2) };
+      }
+      hoursByDateAll.push({ date: dateKey, perEmp });
+    }
+
+    hoursByDateAll.reverse();
+
+    res.render('admin_hours_all', {
+      user: req.session.user,
+      employees,
+      hoursByDateAll,
+      startDate: startDateFormatted,
+      endDate: endDateFormatted,
+      errorMessage
+    });
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
 });
 
 app.get('/health', async (req, res) => {
