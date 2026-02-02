@@ -34,10 +34,18 @@ async function initDb() {
       username VARCHAR(50) UNIQUE NOT NULL,
       password_hash VARCHAR(200) NOT NULL,
       is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+      super_admin BOOLEAN NOT NULL DEFAULT FALSE,
       active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  // Add super_admin column if it doesn't exist (migration)
+  try {
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS super_admin BOOLEAN NOT NULL DEFAULT FALSE`);
+  } catch (err) {
+    console.log('Migration note: super_admin column might already exist or could not be added:', err.message);
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS punches (
@@ -176,6 +184,13 @@ function requireAuth(req, res, next) {
 function requireAdmin(req, res, next) {
   if (!req.session.user || !req.session.user.is_admin) {
     return res.status(403).send('Forbidden');
+  }
+  next();
+}
+
+function requireSuperAdmin(req, res, next) {
+  if (!req.session.user || !req.session.user.super_admin) {
+    return res.status(403).send('Forbidden: Super Admin access required');
   }
   next();
 }
@@ -457,7 +472,7 @@ app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, email, username, password_hash, is_admin FROM employees WHERE username = $1 AND active = TRUE',
+      'SELECT id, name, email, username, password_hash, is_admin, super_admin FROM employees WHERE username = $1 AND active = TRUE',
       [username]
     );
     if (rows.length === 0) {
@@ -473,7 +488,8 @@ app.post('/login', async (req, res) => {
       name: user.name,
       email: user.email,
       username: user.username,
-      is_admin: user.is_admin
+      is_admin: user.is_admin,
+      super_admin: user.super_admin
     };
     res.redirect('/dashboard');
   } catch (err) {
@@ -715,7 +731,7 @@ app.get('/admin/employees', requireAuth, requireAdmin, async (req, res) => {
 
 app.get('/admin/export', requireAuth, requireAdmin, (req, res) => {
   try {
-    res.render('admin_export', { user: req.session.user, exportAction: '/export.xlsx' });
+    res.render('admin_export', { user: req.session.user, exportAction: '/admin/export.xlsx' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
@@ -931,7 +947,7 @@ app.get('/export.xlsx', requireAuth, async (req, res) => {
   await handleExportExcel(req, res);
 });
 
-app.get('/admin/hours', requireAuth, requireAdmin, async (req, res) => {
+app.get('/admin/hours', requireAuth, requireSuperAdmin, async (req, res) => {
   let errorMessage = null;
   try {
     let startDateFormatted = req.query.startDate;
@@ -1082,9 +1098,20 @@ app.get('/health', async (req, res) => {
 app.get('/dev/login-with-token', async (req, res) => {
   const token = req.query.token;
   if (!token || token !== (process.env.DEV_TEST_TOKEN || '')) return res.status(403).send('Forbidden');
-  const { rows } = await pool.query('SELECT id, name, username, is_admin FROM employees WHERE is_admin = TRUE LIMIT 1');
-  if (rows.length === 0) return res.status(500).send('No admin available');
-  req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin };
+  
+  let query = 'SELECT id, name, username, is_admin, super_admin FROM employees WHERE is_admin = TRUE OR super_admin = TRUE';
+  let params = [];
+  
+  if (req.query.username) {
+    query += ' AND username = $1';
+    params.push(req.query.username);
+  }
+  
+  query += ' LIMIT 1';
+
+  const { rows } = await pool.query(query, params);
+  if (rows.length === 0) return res.status(500).send('No matching admin available');
+  req.session.user = { id: rows[0].id, name: rows[0].name, username: rows[0].username, is_admin: rows[0].is_admin, super_admin: rows[0].super_admin };
   res.redirect('/dashboard');
 });
 

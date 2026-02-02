@@ -193,7 +193,9 @@
             <a href="/admin/employees" class="btn btn-outline">Manage Employees</a>
             <a href="/admin/punches" class="btn btn-outline">View Recent Punches</a>
             <a href="/admin/export" class="btn btn-outline">Export Timesheet</a>
-            <a href="/admin/hours" class="btn btn-outline">Previous Days (All)</a>
+            <% if (user.super_admin) { %>
+              <a href="/admin/hours" class="btn btn-outline">Previous Days (All)</a>
+            <% } %>
           </div>
         </section>
       <% } %>
