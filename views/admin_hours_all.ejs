@@ -176,7 +176,7 @@
                       <td><%= day.date %></td>
                       <% employees.forEach(function(emp){ %>
                         <td>
-                          <strong class="editable-hours" onclick="openManualEntry('<%= day.date %>', <%= emp.id %>)" title="Click to edit punches">
+                          <strong class="editable-hours" onclick="openManualEntry('<%= day.date %>', <%= emp.id %>, '<%= emp.username %>')" title="Click to edit punches">
                             <%= (day.perEmp[emp.id] ? day.perEmp[emp.id].hoursDisplay : '0.00') %> hours
                           </strong>
                         </td>
@@ -471,10 +471,10 @@
       let currentEditUserId = null;
       let overlayClickHandler = null;
 
-      async function openManualEntry(date, userId) {
+      async function openManualEntry(date, userId, username) {
         currentEditDate = date;
         currentEditUserId = userId;
-        document.getElementById('modalDateTitle').textContent = `Edit Punches - ${date}`;
+        document.getElementById('modalDateTitle').textContent = `Edit Punches - ${date} (${username})`;
         const overlay = document.getElementById('manualEntryModal');
         overlay.style.display = 'flex';
         overlayClickHandler = function(e){ if (e.target === overlay) closeManualEntry(); };

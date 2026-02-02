@@ -999,7 +999,7 @@ app.get('/admin/hours', requireAuth, requireSuperAdmin, async (req, res) => {
     }
 
     const { rows: employees } = await pool.query(
-      `SELECT id, name FROM employees WHERE active = TRUE ORDER BY name`
+      `SELECT id, name, username FROM employees WHERE active = TRUE ORDER BY name`
     );
 
     const { rows: punches } = await pool.query(
