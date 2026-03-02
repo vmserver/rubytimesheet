@@ -4,7 +4,7 @@
   "description": "Simple web-based timesheet with punch in/out and breaks, with admin employee management.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node start.js",
     "dev": "nodemon server.js",
     "reset:activity": "node scripts/reset-activity.js"
   },

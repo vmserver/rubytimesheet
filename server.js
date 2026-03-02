@@ -2349,33 +2349,6 @@ app.post('/api/save_manual_punches', requireAuth, requireAdmin, async (req, res)
   }
 });
 
-// Start server
-if (require.main === module) {
-  initDb()
-    .then(() => {
-      app.listen(PORT, () => {
-        console.log(`Attempting to listen on port ${PORT}`);
-        console.log(`Timesheet app listening on port ${PORT}`);
-        scheduleMidnightRollover();
-      });
-    })
-    .catch((err) => {
-      console.error('Failed to initialize database', err);
-      console.error('\n=== DATABASE CONNECTION ERROR ===');
-      console.error('You need to set up a PostgreSQL database.');
-      console.error('\nOption 1: Use Render PostgreSQL (Recommended for deployment)');
-      console.error('  1. Go to https://render.com and create a PostgreSQL database');
-      console.error('  2. Copy the DATABASE_URL from Render');
-      console.error('  3. Create a .env file with: DATABASE_URL=<your-render-url>');
-      console.error('\nOption 2: Use a free cloud database for testing');
-      console.error('  - Neon (neon.tech) - Free PostgreSQL');
-      console.error('  - Supabase (supabase.com) - Free PostgreSQL');
-      console.error('  - ElephantSQL (elephantsql.com) - Free PostgreSQL');
-      console.error('\nThen create a .env file with your DATABASE_URL');
-      process.exit(1);
-    });
-}
-
-module.exports = { app, pool, performMidnightRollover };
+module.exports = { app, pool, initDb, scheduleMidnightRollover, performMidnightRollover };
 
 
