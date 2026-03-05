@@ -12,6 +12,9 @@ const EXCELJS_VERSION = require('exceljs/package.json').version;
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Health check endpoint (satisfies Render health checks even if DB is initializing)
+app.get('/healthz', (req, res) => res.status(200).send('OK'));
+
 // Configure timezone for display (server should run in UTC; we'll format as New York time in views)
 const TIMEZONE = 'America/New_York';
 
