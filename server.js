@@ -22,9 +22,20 @@ const TIMEZONE = 'America/New_York';
 // Neon and most cloud databases require SSL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('neon.tech') || process.env.DATABASE_URL?.includes('supabase') || process.env.NODE_ENV === 'production' 
+  ssl: process.env.DATABASE_URL?.includes('neon.tech') || 
+       process.env.DATABASE_URL?.includes('supabase') || 
+       process.env.DATABASE_URL?.includes('aivencloud') ||
+       process.env.NODE_ENV === 'production' 
     ? { rejectUnauthorized: false } 
-    : false
+    : false,
+  // Standard connection timeout
+  connectionTimeoutMillis: 10000, 
+  max: 20 // Standard max connections
+});
+
+// Important: Listen for pool errors to prevent process crashes
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
 });
 
 // Initialize tables
