@@ -314,24 +314,15 @@ function calculateHours(punches, currentTime = null) {
 
 // Format date as YYYY-MM-DD in NY timezone (for database queries)
 function formatDateNY(date) {
-  if (!date) {
-    const now = new Date();
-    const nyStr = now.toLocaleDateString('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
-    const [month, day, year] = nyStr.split('/');
-    return `${year}-${month}-${day}`;
-  }
-  const d = new Date(date);
-  if (isNaN(d.getTime())) {
-    const now = new Date();
-    const nyStr = now.toLocaleDateString('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
-    const [month, day, year] = nyStr.split('/');
-    return `${year}-${month}-${day}`;
-  }
-  
-  // Convert to NY timezone date string
-  const nyStr = d.toLocaleDateString('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
-  const [month, day, year] = nyStr.split('/');
-  return `${year}-${month}-${day}`;
+  const d = (date && !isNaN(new Date(date).getTime())) ? new Date(date) : new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(d);
+  const y = parts.find(p => p.type === 'year').value;
+  const m = parts.find(p => p.type === 'month').value;
+  const dPart = parts.find(p => p.type === 'day').value;
+  return `${y}-${m}-${dPart}`;
 }
 
 // Format date as MM/DD/YYYY in NY timezone (for display)
@@ -352,50 +343,45 @@ function formatDateNYDisplay(date) {
 // Convert YYYY-MM-DD (NY timezone) to UTC Date for database query
 function parseNYDateToUTC(dateString) {
   if (!dateString) return null;
-  // Create a date string that represents midnight in NY
-  // We'll use Intl.DateTimeFormat to get the proper conversion
   const [year, month, day] = dateString.split('-').map(Number);
-  
-  // Create a date object assuming it's in NY timezone
-  // Format: YYYY-MM-DD as if it's in NY timezone
-  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`;
-  
-  // Use a trick: create date in local, then adjust for NY timezone
-  const localDate = new Date(dateStr);
-  const nyDateStr = localDate.toLocaleString('en-US', { timeZone: TIMEZONE });
-  const nyDate = new Date(nyDateStr);
-  const offset = localDate.getTime() - nyDate.getTime();
-  
-  // Create the actual NY midnight date
-  const targetNY = new Date(year, month - 1, day);
-  const targetNYStr = targetNY.toLocaleString('en-US', { timeZone: TIMEZONE });
-  const targetNYDate = new Date(targetNYStr);
-  const targetLocal = new Date(targetNYDate.getTime() + offset);
-  
-  return targetLocal;
+  return nyLocalToUTC(year, month, day, 0, 0, 0);
 }
 
 function getNYEndOfDayUTCFromMMDDYYYY(mmddyyyy) {
   const [month, day, year] = mmddyyyy.split('/').map(Number);
-  const offsetMin = (() => {
-    const probe = new Date(Date.UTC(year, month - 1, day, 12));
-    const s = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, timeZoneName: 'shortOffset', hour: '2-digit', minute: '2-digit' }).format(probe);
-    const m = s.match(/GMT([+-]\d+)/);
-    const hours = m ? parseInt(m[1], 10) : -5;
-    return hours * 60;
-  })();
-  const utcMillis = Date.UTC(year, month - 1, day, 23, 59, 59) + (-offsetMin) * 60 * 1000;
-  return new Date(utcMillis);
+  return nyLocalToUTC(year, month, day, 23, 59, 59, 999);
 }
 
 function nyLocalToUTC(y, m, d, h = 0, mi = 0, s = 0) {
-  const probe = new Date(Date.UTC(y, m - 1, d, 12));
-  const str = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, timeZoneName: 'shortOffset', hour: '2-digit', minute: '2-digit' }).format(probe);
-  const mm = str.match(/GMT([+-]\d+)/);
-  const hours = mm ? parseInt(mm[1], 10) : -5;
-  const offsetMin = hours * 60;
-  const utcMillis = Date.UTC(y, m - 1, d, h, mi, s) + (-offsetMin) * 60 * 1000;
-  return new Date(utcMillis);
+  // Use Intl.DateTimeFormat to reliably handle any New York local time, including DST transitions.
+  // 1. Start with a UTC date estimate (assuming -5 hours offset).
+  let date = new Date(Date.UTC(y, m - 1, d, h + 5, mi, s));
+  
+  // 2. Adjust the UTC timestamp until the formatted local time in NY matches our target.
+  // Usually takes 1 iteration, max 2.
+  for (let i = 0; i < 2; i++) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: TIMEZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }).formatToParts(date);
+    
+    const ly = parseInt(parts.find(p => p.type === 'year').value);
+    const lm = parseInt(parts.find(p => p.type === 'month').value);
+    const ld = parseInt(parts.find(p => p.type === 'day').value);
+    const lh = parseInt(parts.find(p => p.type === 'hour').value) % 24;
+    const lmi = parseInt(parts.find(p => p.type === 'minute').value);
+    const ls = parseInt(parts.find(p => p.type === 'second').value);
+    
+    const localTime = Date.UTC(ly, lm - 1, ld, lh, lmi, ls);
+    const targetTime = Date.UTC(y, m - 1, d, h, mi, s);
+    
+    const diff = targetTime - localTime;
+    if (diff === 0) break;
+    date = new Date(date.getTime() + diff);
+  }
+  return date;
 }
 
 function getStateAt(punches, boundaryUTC) {
@@ -586,16 +572,7 @@ app.get('/dashboard', requireAuth, async (req, res) => {
 
     // Filter punches that belong to "today" in New York timezone
     const todayPunches = allUserPunches.filter(punch => {
-      const punchDateNY = new Date(punch.punched_at).toLocaleDateString('en-US', {
-        timeZone: TIMEZONE,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-      // Convert MM/DD/YYYY -> YYYY-MM-DD for comparison with todayFormatted
-      const [pm, pd, py] = punchDateNY.split('/').map(Number);
-      const punchDateFormatted = `${py}-${String(pm).padStart(2, '0')}-${String(pd).padStart(2, '0')}`;
-      return punchDateFormatted === todayFormatted;
+      return formatDateNY(punch.punched_at) === todayFormatted;
     });
     
     // Check if still punched in for today (same logic as hours history)
@@ -2120,16 +2097,10 @@ async function performMidnightRollover(now = new Date()) {
   const y = parseInt(parts.find(p => p.type === 'year').value);
   const m = parseInt(parts.find(p => p.type === 'month').value);
   const d = parseInt(parts.find(p => p.type === 'day').value);
-  const todayStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  const offsetMin = (() => {
-    const probe = new Date(Date.UTC(y, m - 1, d, 12));
-    const s = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, timeZoneName: 'shortOffset', hour: '2-digit', minute: '2-digit' }).format(probe);
-    const mm = s.match(/GMT([+-]\d+)/);
-    const hours = mm ? parseInt(mm[1], 10) : -5;
-    return hours * 60;
-  })();
-  const todayStartUTC = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) + (-offsetMin) * 60 * 1000);
-  const endYesterdayUTC = new Date(Date.UTC(y, m - 1, d - 1, 23, 59, 59) + (-offsetMin) * 60 * 1000);
+  
+  // Robust UTC boundaries for New York midnight
+  const todayStartUTC = nyLocalToUTC(y, m, d, 0, 0, 0);
+  const endYesterdayUTC = nyLocalToUTC(y, m, d - 1, 23, 59, 59, 999);
 
   const { rows: employees } = await pool.query('SELECT id FROM employees WHERE active = TRUE');
   let affected = 0;
