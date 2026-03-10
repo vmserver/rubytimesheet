@@ -823,15 +823,16 @@ async function handleExportExcel(req, res) {
       return res.status(400).send(`Date range too large. Limit is ${MAX_EXPORT_DAYS} days.`);
     }
     const dateKeys = [];
-    for (let t = startNoonUTC; t <= endNoonUTC; t += 24 * 60 * 60 * 1000) {
-      const d = new Date(t);
-      const dateKey = d.toLocaleDateString('en-US', {
+    let current = new Date(startNoonUTC);
+    while (current.getTime() <= endNoonUTC) {
+      const dateKey = current.toLocaleDateString('en-US', {
         timeZone: TIMEZONE,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'
       });
       dateKeys.push(dateKey);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
 
     function computeDayStats(dayPunches, isToday) {
@@ -1007,15 +1008,16 @@ app.get('/admin/hours', requireAuth, requireSuperAdmin, async (req, res) => {
     const startNoonUTC = Date.UTC(startY, startM - 1, startD, 12);
     const endNoonUTC = Date.UTC(endY, endM - 1, endD, 12);
     const dateKeys = [];
-    for (let t = startNoonUTC; t <= endNoonUTC; t += 24 * 60 * 60 * 1000) {
-      const d = new Date(t);
-      const dateKey = d.toLocaleDateString('en-US', {
+    let current = new Date(startNoonUTC);
+    while (current.getTime() <= endNoonUTC) {
+      const dateKey = current.toLocaleDateString('en-US', {
         timeZone: TIMEZONE,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'
       });
       dateKeys.push(dateKey);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
 
     const punchesByEmpByDate = new Map();
@@ -2200,7 +2202,7 @@ function scheduleMidnightRollover() {
       }
     })();
   }
-  const nextMidnightUTC = new Date(midnightNYUTC.getTime() + 24 * 60 * 60 * 1000);
+  const nextMidnightUTC = nyLocalToUTC(y, m, d + 1, 0, 0, 0);
   const delay = nextMidnightUTC.getTime() - now.getTime();
   setTimeout(async () => {
     try {
