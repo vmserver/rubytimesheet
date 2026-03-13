@@ -1,0 +1,43 @@
+name: Database Backup
+
+on:
+  schedule:
+    - cron: '0 0,12 * * *' # Twice a day at midnight and noon UTC
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --production
+
+      - name: Run backup script
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/backup_db.js
+
+      - name: Checkout Backup Repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.BACKUP_REPO_FULL_NAME }}
+          token: ${{ secrets.BACKUP_REPO_TOKEN }}
+          path: backup-repo
+
+      - name: Push backup to Private Repo
+        run: |
+          cp backup_full.json backup-repo/backup_full.json
+          cd backup-repo
+          git config user.name "GitHub Actions Backup"
+          git config user.email "actions@github.com"
+          git add backup_full.json
+          git commit -m "Automated backup: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || echo "No changes to commit"
+          git push origin main

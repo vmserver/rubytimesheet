@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node start.js",
     "dev": "nodemon server.js",
+    "backup": "node scripts/backup_db.js",
     "reset:activity": "node scripts/reset-activity.js"
   },
   "keywords": [

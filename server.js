@@ -385,71 +385,104 @@ function nyLocalToUTC(y, m, d, h = 0, mi = 0, s = 0) {
 }
 
 function getStateAt(punches, boundaryUTC) {
-  const arr = punches.filter((p) => new Date(p.punched_at) <= boundaryUTC).sort((a, b) => new Date(a.punched_at) - new Date(b.punched_at));
+  const punchOrder = { 'in': 1, 'break_start': 2, 'break_end': 3, 'out': 4 };
+  const arr = punches
+    .filter((p) => new Date(p.punched_at) <= boundaryUTC)
+    .sort((a, b) => {
+      const diff = new Date(a.punched_at) - new Date(b.punched_at);
+      if (diff !== 0) return diff;
+      return (punchOrder[a.punch_type] || 0) - (punchOrder[b.punch_type] || 0);
+    });
   let state = 'out';
-  let onBreak = false;
   for (const p of arr) {
     const t = p.punch_type;
     if (t === 'in') {
       state = 'in';
-      onBreak = false;
     } else if (t === 'break_start') {
-      if (state === 'in') {
-        onBreak = true;
-        state = 'break';
-      }
+      if (state === 'in') state = 'break';
     } else if (t === 'break_end') {
       state = 'in';
-      onBreak = false;
     } else if (t === 'out') {
       state = 'out';
-      onBreak = false;
     }
   }
   return state;
 }
 
-async function ensureBackfillForUser(userId, days = 7) {
+async function ensureBackfillForUser(userId) {
   const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
-  const y = parseInt(parts.find((p) => p.type === 'year').value);
-  const m = parseInt(parts.find((p) => p.type === 'month').value);
-  const d = parseInt(parts.find((p) => p.type === 'day').value);
-  const startUTC = nyLocalToUTC(y, m, d - days, 0, 0, 0);
-  const endUTC = nyLocalToUTC(y, m, d, 0, 0, 0);
-  const { rows: punches } = await pool.query(
-    `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3 ORDER BY punched_at ASC`,
-    [userId, startUTC, now]
+  
+  // 1. Get the very last punch for this user
+  const { rows: latestPunches } = await pool.query(
+    `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 ORDER BY punched_at DESC LIMIT 1`,
+    [userId]
   );
+
+  if (latestPunches.length === 0) return 0;
+  
+  const lastPunch = latestPunches[0];
+  const lastPunchType = lastPunch.punch_type;
+  const lastPunchTime = new Date(lastPunch.punched_at);
+
+  // 2. If the last punch was 'out', no active session to rollover
+  if (lastPunchType === 'out') return 0;
+
+  // 3. Determine user's active state (if 'in', 'break_start', or 'break_end')
+  // Note: 'break_end' means they are still 'in' (working).
+  let activeState = 'in';
+  if (lastPunchType === 'break_start') activeState = 'break';
+  else if (lastPunchType === 'break_end' || lastPunchType === 'in') activeState = 'in';
+
+  // 4. Calculate how many midnight boundaries have passed since lastPunchTime
+  // Use New York time to find midnights
+  const nyFormatter = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+  
+  const getNYMidnightAfter = (date) => {
+    const parts = nyFormatter.formatToParts(date);
+    const y = parseInt(parts.find(p => p.type === 'year').value);
+    const m = parseInt(parts.find(p => p.type === 'month').value);
+    const d = parseInt(parts.find(p => p.type === 'day').value);
+    // Midnight of the *next* day in NY
+    return nyLocalToUTC(y, m, d + 1, 0, 0, 0);
+  };
+
+  let nextMidnight = getNYMidnightAfter(lastPunchTime);
   let inserted = 0;
-  for (let i = days; i >= 1; i--) {
-    const boundary = nyLocalToUTC(y, m, d - (i - 1), 0, 0, 0);
-    const state = getStateAt(punches, boundary);
-    if (state === 'in' || state === 'break') {
-      const outTime = new Date(boundary.getTime() - 1000);
-      const inTime = boundary;
-      const windowStart = new Date(outTime.getTime() - 2000);
-      const windowEnd = new Date(inTime.getTime() + 2000);
-      const { rows: exists } = await pool.query(
-        `SELECT 1 FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3 LIMIT 1`,
-        [userId, windowStart, windowEnd]
-      );
-      if (exists.length === 0) {
-        if (state === 'break') {
-          // ensure break_end is before out
-          const be = new Date(boundary.getTime() - 2000);
-          await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'break_end', be]);
-        }
-        await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'out', outTime]);
-        await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'in', inTime]);
-        if (state === 'break') {
-          const bs = new Date(inTime.getTime() + 1000);
-          await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, [userId, 'break_start', bs]);
-        }
-        inserted++;
-      }
+
+  // 5. Loop through each midnight boundary that has passed until 'now'
+  while (nextMidnight.getTime() <= now.getTime()) {
+    console.log(`Auto-Rollover on load: User ${userId} at ${nextMidnight.toISOString()} (State: ${activeState})`);
+    
+    if (activeState === 'break') {
+      // 4-punch sequence for break rollover:
+      // 1. break_end (Day N 11:59:58)
+      // 2. out (Day N 11:59:59)
+      // 3. in (Day N+1 12:00:00)
+      // 4. break_start (Day N+1 12:00:01)
+      await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, 
+        [userId, 'break_end', new Date(nextMidnight.getTime() - 2000)]);
+      await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, 
+        [userId, 'out', new Date(nextMidnight.getTime() - 1000)]);
+      await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, 
+        [userId, 'in', nextMidnight]);
+      await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, 
+        [userId, 'break_start', new Date(nextMidnight.getTime() + 1000)]);
+      inserted += 4;
+    } else {
+      // 2-punch sequence for work rollover:
+      // 1. out (Day N 11:59:59)
+      // 2. in (Day N+1 12:00:00)
+      await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, 
+        [userId, 'out', new Date(nextMidnight.getTime() - 1000)]);
+      await pool.query(`INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)`, 
+        [userId, 'in', nextMidnight]);
+      inserted += 2;
     }
+
+    // Move to the next potential midnight
+    nextMidnight = getNYMidnightAfter(nextMidnight);
   }
+
   return inserted;
 }
 
@@ -2093,91 +2126,123 @@ app.get('/dev/recent-punches', async (req, res) => {
   }
 });
 
-async function performMidnightRollover(now = new Date()) {
-  const nyFormatter = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
-  const parts = nyFormatter.formatToParts(now);
-  const y = parseInt(parts.find(p => p.type === 'year').value);
-  const m = parseInt(parts.find(p => p.type === 'month').value);
-  const d = parseInt(parts.find(p => p.type === 'day').value);
-  
-  // Robust UTC boundaries for New York midnight
-  const todayStartUTC = nyLocalToUTC(y, m, d, 0, 0, 0);
-  const endYesterdayUTC = nyLocalToUTC(y, m, d - 1, 23, 59, 59, 999);
+// Admin: Manually trigger rollover for testing (token-gated)
+app.get('/admin/rollover-now', async (req, res) => {
+  const token = req.query.token;
+  const testToken = process.env.DEV_TEST_TOKEN || '123';
+  if (!token || token !== testToken) return res.status(403).send('Forbidden');
 
-  const { rows: employees } = await pool.query('SELECT id FROM employees WHERE active = TRUE');
+  try {
+    const result = await performMidnightRollover(new Date());
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+async function performMidnightRollover(now = new Date(), targetUserId = null) {
+  const nowNY = new Date(now.toLocaleString('en-US', { timeZone: TIMEZONE }));
+  const y = nowNY.getFullYear();
+  const m = nowNY.getMonth() + 1;
+  const d = nowNY.getDate();
+  
+  // Robust UTC boundary for the most recent midnight (Start of today in NY)
+  const boundaryUTC = nyLocalToUTC(y, m, d, 0, 0, 0);
+  const prevEndUTC = new Date(boundaryUTC.getTime() - 1);
+
+  const targetTime = now.getTime();
+
+  console.log('--- STARTING ROLLOVER ---');
+  console.log('Target User ID:', targetUserId || 'ALL');
+  console.log('NY Date derived:', `${m}/${d}/${y}`);
+  console.log('Boundary (UTC):', boundaryUTC.toISOString());
+  console.log('Prev End (UTC):', prevEndUTC.toISOString());
+  console.log('Current Server Time (UTC):', new Date(targetTime).toISOString());
+
+  // CRITICAL: Prevent creating future punches. 
+  // If the midnight boundary is in the future relative to "now", stop.
+  if (boundaryUTC.getTime() > targetTime) {
+    console.log(`Boundary ${boundaryUTC.toISOString()} is in the future. No rollover needed yet.`);
+    return { affected: 0 };
+  }
+
+  let query = 'SELECT id, username FROM employees WHERE active = TRUE';
+  let params = [];
+  if (targetUserId) {
+    query += ' AND id = $1';
+    params.push(targetUserId);
+  }
+  const { rows: employees } = await pool.query(query, params);
   let affected = 0;
   for (const emp of employees) {
-    const windowStart = new Date(endYesterdayUTC.getTime() - 2000);
-    const windowEnd = new Date(todayStartUTC.getTime() + 2000);
-    const { rows: windowPunches } = await pool.query(
-      `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3 ORDER BY punched_at ASC`,
-      [emp.id, windowStart, windowEnd]
-    );
-
-    const hasOutBeforeBoundary = windowPunches.some(
-      (p) => p.punch_type === 'out' && new Date(p.punched_at) <= endYesterdayUTC
-    );
-    const hasInAfterBoundary = windowPunches.some(
-      (p) => p.punch_type === 'in' && new Date(p.punched_at) >= todayStartUTC
-    );
-    const hasBreakEndBeforeBoundary = windowPunches.some(
-      (p) => p.punch_type === 'break_end' && new Date(p.punched_at) <= endYesterdayUTC
-    );
-    const hasBreakStartAfterBoundary = windowPunches.some(
-      (p) => p.punch_type === 'break_start' && new Date(p.punched_at) >= todayStartUTC
-    );
-
+    // 1. Determine state at the exact end of previous day
     const { rows: upToBoundary } = await pool.query(
       `SELECT punch_type, punched_at FROM punches WHERE employee_id = $1 AND punched_at <= $2 ORDER BY punched_at ASC`,
-      [emp.id, endYesterdayUTC]
+      [emp.id, prevEndUTC]
     );
-    const stateAtBoundary = getStateAt(upToBoundary, endYesterdayUTC);
+    const state = getStateAt(upToBoundary, prevEndUTC);
 
-    console.log('Midnight rollover decision', {
-      employeeId: emp.id,
-      stateAtBoundary,
-      hasOutBeforeBoundary,
-      hasInAfterBoundary,
-      hasBreakEndBeforeBoundary,
-      hasBreakStartAfterBoundary,
-      windowStart: windowStart.toISOString(),
-      windowEnd: windowEnd.toISOString(),
-      endYesterdayUTC: endYesterdayUTC.toISOString(),
-      todayStartUTC: todayStartUTC.toISOString()
-    });
+    if (state === 'in' || state === 'break') {
+      console.log(`Rollover required for ${emp.username} (ID: ${emp.id}). State: ${state}`);
+      // Check for existing rollover punches within a small window around midnight
+      const windowStart = new Date(boundaryUTC.getTime() - 5000);
+      const windowEnd = new Date(boundaryUTC.getTime() + 5000);
+      const { rows: existing } = await pool.query(
+        `SELECT punch_type, punched_at FROM punches 
+         WHERE employee_id = $1 AND punched_at BETWEEN $2 AND $3`,
+        [emp.id, windowStart, windowEnd]
+      );
 
-    if (stateAtBoundary === 'in' || stateAtBoundary === 'break') {
-      if (stateAtBoundary === 'break' && !hasBreakEndBeforeBoundary) {
-        // Ensure break_end is strictly 1 second before the out punch (which is at endYesterdayUTC)
-        // Using timestamp arithmetic to guarantee sequence
-        const be = new Date(endYesterdayUTC.getTime() - 1000);
-        
-        console.log(`DEBUG: Inserting break_end for employee ${emp.id} at ${be.toISOString()} (calculated from ${endYesterdayUTC.toISOString()})`);
-        await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_end', be]);
-        affected++;
-      }
-      if (!hasOutBeforeBoundary) {
-        // Validate sequence if we just inserted a break_end
-        if (stateAtBoundary === 'break' && !hasBreakEndBeforeBoundary) {
-           const beCheck = new Date(endYesterdayUTC.getTime() - 1000);
-           if (beCheck.getTime() >= endYesterdayUTC.getTime()) {
-               console.error('CRITICAL: break_end timestamp >= out timestamp during rollover!');
-               // Force correction if somehow math failed (unlikely with getTime)
-               endYesterdayUTC.setTime(beCheck.getTime() + 1000);
-           }
+      const hasOut = existing.some(p => p.punch_type === 'out' && new Date(p.punched_at) < boundaryUTC);
+      const hasIn = existing.some(p => p.punch_type === 'in' && new Date(p.punched_at) >= boundaryUTC);
+
+      if (!hasOut || !hasIn) {
+        if (state === 'break') {
+          const hasBE = existing.some(p => p.punch_type === 'break_end' && new Date(p.punched_at) < boundaryUTC);
+          if (!hasBE) {
+            console.log(`Inserting break_end for ${emp.username}`);
+            await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', 
+              [emp.id, 'break_end', new Date(boundaryUTC.getTime() - 2000)]);
+            affected++;
+          }
+          
+          if (!hasOut) {
+            console.log(`Inserting out for ${emp.username}`);
+            await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', 
+              [emp.id, 'out', new Date(boundaryUTC.getTime() - 1000)]);
+            affected++;
+          }
+
+          if (!hasIn) {
+            console.log(`Inserting in for ${emp.username}`);
+            await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', 
+              [emp.id, 'in', boundaryUTC]);
+            affected++;
+          }
+
+          const hasBS = existing.some(p => p.punch_type === 'break_start' && new Date(p.punched_at) >= boundaryUTC);
+          if (!hasBS) {
+            console.log(`Inserting break_start for ${emp.username}`);
+            await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', 
+              [emp.id, 'break_start', new Date(boundaryUTC.getTime() + 1000)]);
+            affected++;
+          }
+        } else {
+          // state is 'in'
+          if (!hasOut) {
+            console.log(`Inserting out for ${emp.username}`);
+            await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', 
+              [emp.id, 'out', new Date(boundaryUTC.getTime() - 1000)]);
+            affected++;
+          }
+          if (!hasIn) {
+            console.log(`Inserting in for ${emp.username}`);
+            await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', 
+              [emp.id, 'in', boundaryUTC]);
+            affected++;
+          }
         }
-        console.log(`DEBUG: Inserting out for employee ${emp.id} at ${endYesterdayUTC.toISOString()}`);
-        await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'out', endYesterdayUTC]);
-        affected++;
-      }
-      if (!hasInAfterBoundary) {
-        await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'in', todayStartUTC]);
-        affected++;
-      }
-      if (stateAtBoundary === 'break' && !hasBreakStartAfterBoundary) {
-        const bs = new Date(todayStartUTC.getTime() + 1000);
-        await pool.query('INSERT INTO punches (employee_id, punch_type, punched_at) VALUES ($1, $2, $3)', [emp.id, 'break_start', bs]);
-        affected++;
       }
     }
   }
@@ -2196,10 +2261,10 @@ function scheduleMidnightRollover() {
   if (sinceMidnight >= 0 && sinceMidnight <= graceMs) {
     (async () => {
       try {
-        await performMidnightRollover(new Date());
-      } catch (e) {
-        console.error('Midnight rollover immediate run failed', e);
-      }
+    await performMidnightRollover(new Date());
+  } catch (e) {
+    console.error('Midnight rollover immediate run failed', e);
+  }
     })();
   }
   const nextMidnightUTC = nyLocalToUTC(y, m, d + 1, 0, 0, 0);
@@ -2213,32 +2278,25 @@ function scheduleMidnightRollover() {
   }, Math.max(1000, delay));
 }
 
-app.post('/admin/rollover-now', async (req, res) => {
-  const token = req.query.token;
-  if (!req.session.user) {
-    if (!token || token !== (process.env.DEV_TEST_TOKEN || '')) return res.status(403).send('Forbidden');
-  } else {
-    if (!req.session.user.is_admin) return res.status(403).send('Forbidden');
-  }
-  try {
-    const r = await performMidnightRollover(new Date());
-    res.json({ ok: true, affected: r.affected });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
 app.get('/admin/rollover-now', async (req, res) => {
   const token = req.query.token;
-  if (!req.session.user) {
-    if (!token || token !== (process.env.DEV_TEST_TOKEN || '')) return res.status(403).send('Forbidden');
-  } else {
-    if (!req.session.user.is_admin) return res.status(403).send('Forbidden');
+  // Priority: 1. userId from query, 2. current logged in user, 3. null (for scheduled task)
+  let targetUserId = req.query.userId ? parseInt(req.query.userId) : (req.session?.user?.id || null);
+  
+  // Security check: Only allow token-based or admin-session-based triggers
+  const devToken = process.env.DEV_TEST_TOKEN || '123';
+  const isTokenValid = token && token === devToken;
+  const isAdminSession = req.session?.user?.is_admin;
+
+  if (!isTokenValid && !isAdminSession) {
+    return res.status(403).send('Forbidden');
   }
+
   try {
-    const r = await performMidnightRollover(new Date());
-    res.json({ ok: true, affected: r.affected });
+    const r = await performMidnightRollover(new Date(), targetUserId);
+    res.json({ ok: true, affected: r.affected, targetUserId });
   } catch (e) {
+    console.error('Manual rollover failed:', e);
     res.status(500).json({ ok: false, error: e.message });
   }
 });

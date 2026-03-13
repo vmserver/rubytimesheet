@@ -17,7 +17,6 @@ Thumbs.db
 .idea/
 nul
 backup_full.json
-scripts/backup_db.js
 scripts/restore_db.js
 scripts/secure_db.js
 cookies.txt
