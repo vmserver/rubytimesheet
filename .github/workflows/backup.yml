@@ -25,19 +25,40 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: node scripts/backup_db.js
 
-      - name: Checkout Backup Repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ secrets.BACKUP_REPO_FULL_NAME }}
-          token: ${{ secrets.BACKUP_REPO_TOKEN }}
-          path: backup-repo
-
       - name: Push backup to Private Repo
+        env:
+          BACKUP_REPO_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+          BACKUP_REPO_FULL_NAME: ${{ secrets.BACKUP_REPO_FULL_NAME }}
         run: |
+          # 1. Setup backup-repo directory
+          # We try to clone first. If it's a blank repo, clone will fail, so we create a new dir and init.
+          if git clone https://x-access-token:${BACKUP_REPO_TOKEN}@github.com/${BACKUP_REPO_FULL_NAME}.git backup-repo; then
+            echo "✅ Successfully cloned existing repository."
+          else
+            echo "⚠️ Clone failed. Repository might be blank. Initializing from scratch..."
+            mkdir -p backup-repo
+            cd backup-repo
+            git init
+            git remote add origin https://x-access-token:${BACKUP_REPO_TOKEN}@github.com/${BACKUP_REPO_FULL_NAME}.git
+            git checkout -b main
+            cd ..
+          fi
+          
+          # 2. Copy the backup file
           cp backup_full.json backup-repo/backup_full.json
+          
+          # 3. Commit and Push
           cd backup-repo
           git config user.name "GitHub Actions Backup"
           git config user.email "actions@github.com"
           git add backup_full.json
-          git commit -m "Automated backup: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || echo "No changes to commit"
-          git push origin main
+          
+          # Only commit if there are changes
+          if git status --porcelain | grep -q .; then
+            git commit -m "Automated backup: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            # Push -u origin main to set up upstream if it's the first time
+            git push -u origin main
+          else
+            echo "No changes to backup_full.json"
+          fi
+
