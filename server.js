@@ -138,6 +138,7 @@ app.set('views', path.join(__dirname, 'views'));
 const BRAND_NAME = process.env.BRAND_NAME || 'Ruby Group Inc. Employee Timesheet';
 app.use((req, res, next) => {
   res.locals.brand = BRAND_NAME;
+  res.locals.user = req.session ? req.session.user : null;
   next();
 });
 
@@ -639,7 +640,6 @@ app.get('/dashboard', requireAuth, async (req, res) => {
     console.log('Today hours to display:', todayHoursDisplay);
 
     res.render('dashboard', {
-      user: req.session.user,
       punches: punches || [],
       isPunchedIn: !!isPunchedIn,
       isOnBreak: !!isOnBreak,
@@ -746,7 +746,7 @@ app.get('/admin/employees', requireAuth, requireAdmin, async (req, res) => {
     const { rows: employees } = await pool.query(
       'SELECT id, name, email, username, is_admin, active, created_at FROM employees WHERE active = TRUE ORDER BY id'
     );
-    res.render('admin_employees', { user: req.session.user, employees });
+    res.render('admin_employees', { employees });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
@@ -755,7 +755,7 @@ app.get('/admin/employees', requireAuth, requireAdmin, async (req, res) => {
 
 app.get('/admin/export', requireAuth, requireAdmin, (req, res) => {
   try {
-    res.render('admin_export', { user: req.session.user, exportAction: '/admin/export.xlsx' });
+    res.render('admin_export', { exportAction: '/admin/export.xlsx' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
@@ -764,7 +764,7 @@ app.get('/admin/export', requireAuth, requireAdmin, (req, res) => {
 
 app.get('/export', requireAuth, (req, res) => {
   try {
-    res.render('admin_export', { user: req.session.user, exportAction: '/export.xlsx' });
+    res.render('admin_export', { exportAction: '/export.xlsx' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
@@ -972,6 +972,10 @@ app.get('/export.xlsx', requireAuth, async (req, res) => {
   await handleExportExcel(req, res);
 });
 
+app.get('/admin', requireAuth, requireAdmin, async (req, res) => {
+  res.render('admin', { brand: BRAND_NAME });
+});
+
 app.get('/admin/hours', requireAuth, requireSuperAdmin, async (req, res) => {
   let errorMessage = null;
   try {
@@ -1091,7 +1095,6 @@ app.get('/admin/hours', requireAuth, requireSuperAdmin, async (req, res) => {
     hoursByDateAll.reverse();
 
     res.render('admin_hours_all', {
-      user: req.session.user,
       employees,
       hoursByDateAll,
       startDate: startDateFormatted,
@@ -1402,7 +1405,6 @@ app.get('/dev/backfill-now', async (req, res) => {
 // Admin: new employee form
 app.get('/admin/employees/new', requireAuth, requireAdmin, (req, res) => {
   res.render('admin_employee_form', {
-    user: req.session.user,
     employee: null,
     error: null
   });
@@ -1443,7 +1445,6 @@ app.get('/admin/employees/:id(\\d+)', requireAuth, requireAdmin, async (req, res
     );
     if (rows.length === 0) return res.status(404).send('Employee not found');
     res.render('admin_employee_form', {
-      user: req.session.user,
       employee: rows[0],
       error: null
     });
@@ -1512,7 +1513,6 @@ app.post('/admin/employees/:id/delete', requireAuth, requireAdmin, async (req, r
       );
       if (rows.length === 0) return res.status(404).send('Employee not found');
       return res.render('admin_employee_form', {
-        user: req.session.user,
         employee: rows[0],
         error: 'Select a delete option to proceed'
       });
@@ -2068,7 +2068,6 @@ app.get('/hours', requireAuth, async (req, res) => {
     
     res.locals.debugInfo = debugInfo; // Set on res.locals too
     res.render('hours_history', {
-      user: req.session.user || {},
       hoursByDate: [],
       startDate: '',
       endDate: '',
@@ -2102,7 +2101,7 @@ app.get('/admin/punches', requireAuth, requireAdmin, async (req, res) => {
        ORDER BY p.punched_at DESC
        LIMIT 50`
     );
-    res.render('admin_punches', { user: req.session.user, punches });
+    res.render('admin_punches', { punches });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');

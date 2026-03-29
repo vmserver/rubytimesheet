@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Tools - Timesheet</title>
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('theme') || 'light';
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved = saved === 'system' ? (prefersDark ? 'dark' : 'light') : saved;
+          if (resolved !== 'dark' && resolved !== 'light') { resolved = 'light'; }
+          if (resolved === 'dark') { document.documentElement.classList.add('dark'); }
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/userMenu.js" defer></script>
+</head>
+<body>
+    <header class="topbar">
+      <a href="/dashboard" class="brand" aria-label="Dashboard"><%= brand %></a>
+      <% if (user) { %>
+        <div class="topbar-nav">
+          <button onclick="window.history.back()" class="btn btn-nav">← Back</button>
+          <a href="/dashboard" class="btn btn-nav">Home</a>
+        </div>
+        <div class="topbar-right">
+          <%- include('partials/userMenu') %>
+        </div>
+      <% } %>
+    </header>
+
+    <main class="container dashboard">
+      <section class="card admin-tools">
+        <h2>Admin tools</h2>
+        <div class="button-row">
+          <a href="/admin/employees" class="btn btn-outline">Manage Employees</a>
+          <a href="/admin/punches" class="btn btn-outline">View Recent Punches</a>
+          <a href="/admin/export" class="btn btn-outline">Export Timesheet</a>
+          <% if (user.super_admin) { %>
+            <a href="/admin/hours" class="btn btn-outline">Previous Days (All)</a>
+          <% } %>
+        </div>
+      </section>
+    </main>
+</body>
+</html>
