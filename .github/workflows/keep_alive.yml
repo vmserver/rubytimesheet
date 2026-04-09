@@ -1,0 +1,18 @@
+name: Server Keep-Alive (Autorollover Trigger)
+
+on:
+  schedule:
+    # 11:55 PM EDT (UTC-4) is 3:55 AM UTC
+    # 11:55 PM EST (UTC-5) is 4:55 AM UTC
+    # We will trigger it at 3:55 AM UTC to cover the current EDT season
+    - cron: '55 3 * * *'
+  workflow_dispatch: # Allows manual trigger for testing
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger HTTPS Request
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" https://rubytimesheet.onrender.com/
+          echo "Triggered request to Render server at $(date)"
